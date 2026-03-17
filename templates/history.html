@@ -1,0 +1,1158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>History - Boondock Monitor</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="/static/css/style.css" rel="stylesheet">
+    <style>
+        .history-terminal {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            height: calc(100vh - 280px);
+            min-height: 400px;
+            overflow-y: auto;
+            padding: 0.5rem;
+        }
+        .history-line {
+            padding: 2px 0;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            gap: 1rem;
+        }
+        .history-line:hover {
+            background: var(--hover-bg);
+        }
+        .history-timestamp {
+            color: var(--text-secondary);
+            min-width: 180px;
+            flex-shrink: 0;
+        }
+        .history-port {
+            color: var(--accent-info);
+            min-width: 70px;
+            flex-shrink: 0;
+        }
+        .history-message {
+            color: var(--accent-success);
+            word-break: break-all;
+            flex: 1;
+        }
+        .history-message.sent { color: var(--accent-warning); }
+        .history-message.error { color: var(--accent-danger); }
+        .history-message.health { color: var(--accent-info); }
+        .history-message.warning { color: #ffc107; }
+        .history-message.fatal { color: #dc3545; }
+        .history-message.info { color: #17a2b8; }
+        .history-message.event { color: #28a745; }
+        .history-message.config { color: #6f42c1; }
+        
+        .history-line.hidden { display: none; }
+        .history-line.highlight { background: rgba(88, 166, 255, 0.2); }
+        
+        .device-selector {
+            background: var(--bg-darker);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+        .date-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .date-item {
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+        .date-item:hover {
+            background: rgba(88, 166, 255, 0.1);
+        }
+        .date-item.active {
+            background: var(--accent-primary);
+            color: #000;
+        }
+        
+        /* LLM Analysis Panel */
+        .llm-panel {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            margin-top: 1rem;
+            box-shadow: 0 2px 10px var(--shadow);
+        }
+        .llm-response {
+            background: var(--bg-dark);
+            border-radius: 6px;
+            padding: 1rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+            color: var(--text-primary);
+        }
+        .llm-response.loading {
+            color: var(--accent-info);
+        }
+    </style>
+</head>
+<body>
+    <!-- Tab Navigation -->
+    <nav class="tab-nav">
+        <div class="container-fluid d-flex justify-content-between align-items-center">
+            <!-- Mobile hamburger -->
+            <button class="btn btn-outline-light d-md-none hamburger-btn" type="button" data-bs-toggle="offcanvas" data-bs-target="#mobileMenu">
+                <i class="bi bi-list fs-4"></i>
+            </button>
+            
+            <!-- Desktop nav -->
+            <ul class="nav d-none d-md-flex">
+                <li class="nav-item">
+                    <a class="nav-link" href="/">
+                        <i class="bi bi-soundwave me-2"></i>Boondock Monitor
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/terminal">
+                        <i class="bi bi-terminal me-2"></i>Terminal
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/devices">
+                        <i class="bi bi-cpu me-2"></i>Devices
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/player">
+                        <i class="bi bi-play-circle me-2"></i>Player
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link active" href="/history">
+                        <i class="bi bi-clock-history me-2"></i>History
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/sessions">
+                        <i class="bi bi-calendar-event me-2"></i>Sessions
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/firmware">
+                        <i class="bi bi-memory me-2"></i>Firmware
+                    </a>
+                </li>
+            </ul>
+            
+            <!-- Mobile title -->
+            <span class="d-md-none text-light fw-bold">History</span>
+            <span class="d-md-none"></span>
+        </div>
+    </nav>
+    
+    <!-- Mobile Navigation Offcanvas -->
+    <div class="offcanvas offcanvas-start bg-dark" tabindex="-1" id="mobileMenu">
+        <div class="offcanvas-header border-bottom border-secondary">
+            <h5 class="offcanvas-title text-light">Navigation</h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas"></button>
+        </div>
+        <div class="offcanvas-body">
+            <nav class="nav flex-column">
+                <a class="nav-link text-light py-3 border-bottom border-secondary" href="/">
+                    <i class="bi bi-soundwave me-3"></i>Boondock Monitor
+                </a>
+                <a class="nav-link text-light py-3 border-bottom border-secondary" href="/terminal">
+                    <i class="bi bi-terminal me-3"></i>Terminal
+                </a>
+                <a class="nav-link text-light py-3 border-bottom border-secondary" href="/devices">
+                    <i class="bi bi-cpu me-3"></i>Devices
+                </a>
+                <a class="nav-link text-light py-3 border-bottom border-secondary" href="/player">
+                    <i class="bi bi-play-circle me-3"></i>Player
+                </a>
+                <a class="nav-link text-light py-3 border-bottom border-secondary active" href="/history">
+                    <i class="bi bi-clock-history me-3"></i>History
+                </a>
+                <a class="nav-link text-light py-3 border-bottom border-secondary" href="/firmware">
+                    <i class="bi bi-memory me-3"></i>Firmware
+                </a>
+            </nav>
+        </div>
+    </div>
+
+    <div class="container-fluid py-3">
+        <div class="row">
+            <!-- Sidebar -->
+            <div class="col-md-3">
+                <div class="device-selector">
+                    <h6 class="mb-3"><i class="bi bi-cpu me-2"></i>Devices</h6>
+                    <div id="deviceList">
+                        <p class="text-muted small">Loading...</p>
+                    </div>
+                </div>
+                
+                <div class="device-selector" id="dateSelector" style="display: none;">
+                    <h6 class="mb-3"><i class="bi bi-calendar me-2"></i>Dates</h6>
+                    <div class="date-list" id="dateList"></div>
+                </div>
+            </div>
+            
+            <!-- Main Content -->
+            <div class="col-md-9">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <span id="historyTitle"><i class="bi bi-clock-history me-2"></i>Select a device and date</span>
+                        <div class="d-flex gap-2 align-items-center flex-wrap">
+                            <span class="badge bg-secondary" id="messageCount">0 messages</span>
+                            <button class="btn btn-sm btn-outline-primary" onclick="jumpToLatest()" id="jumpToLatestBtn" style="display: none;">
+                                <i class="bi bi-arrow-down-circle me-1"></i>Jump to Latest
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="loadMore()" id="loadMoreBtn" style="display: none;">
+                                <i class="bi bi-arrow-down me-1"></i>Load More
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body p-2 border-bottom">
+                        <div class="d-flex gap-2 align-items-center flex-wrap">
+                            <div class="flex-grow-1" style="min-width: 200px;">
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text"><i class="bi bi-search"></i></span>
+                                    <input type="text" class="form-control" id="searchBox" placeholder="Search messages..." 
+                                           style="background: var(--bg-dark); color: var(--text-primary); border-color: var(--border-color);"
+                                           oninput="applyFilters()">
+                                </div>
+                            </div>
+                            <div class="dropdown">
+                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" id="filterDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <i class="bi bi-funnel me-1"></i>Filters
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="filterDropdown" style="background: var(--bg-card); border-color: var(--border-color); min-width: 200px; color: var(--text-primary);">
+                                    <li class="px-3 py-2">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="filterEverything" checked onchange="applyFilters()">
+                                            <label class="form-check-label" for="filterEverything" style="color: var(--text-primary); font-weight: 600;">Everything</label>
+                                        </div>
+                                    </li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li class="px-3 py-2">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="filterHealth" checked onchange="applyFilters()">
+                                            <label class="form-check-label" for="filterHealth" style="color: var(--text-primary);">Health Messages</label>
+                                        </div>
+                                    </li>
+                                    <li class="px-3 py-2">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="filterWarning" checked onchange="applyFilters()">
+                                            <label class="form-check-label" for="filterWarning" style="color: var(--text-primary);">Warning</label>
+                                        </div>
+                                    </li>
+                                    <li class="px-3 py-2">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="filterFatal" checked onchange="applyFilters()">
+                                            <label class="form-check-label" for="filterFatal" style="color: var(--text-primary);">Fatal</label>
+                                        </div>
+                                    </li>
+                                    <li class="px-3 py-2">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="filterError" checked onchange="applyFilters()">
+                                            <label class="form-check-label" for="filterError" style="color: var(--text-primary);">Error</label>
+                                        </div>
+                                    </li>
+                                    <li class="px-3 py-2">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="filterInfo" checked onchange="applyFilters()">
+                                            <label class="form-check-label" for="filterInfo" style="color: var(--text-primary);">Info</label>
+                                        </div>
+                                    </li>
+                                    <li class="px-3 py-2">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="filterEvent" checked onchange="applyFilters()">
+                                            <label class="form-check-label" for="filterEvent" style="color: var(--text-primary);">Event</label>
+                                        </div>
+                                    </li>
+                                    <li class="px-3 py-2">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="filterConfig" checked onchange="applyFilters()">
+                                            <label class="form-check-label" for="filterConfig" style="color: var(--text-primary);">Config</label>
+                                        </div>
+                                    </li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li class="px-3 py-2">
+                                        <button class="btn btn-sm btn-outline-primary w-100" onclick="selectAllFilters()">Select All</button>
+                                    </li>
+                                    <li class="px-3 py-2">
+                                        <button class="btn btn-sm btn-outline-secondary w-100" onclick="deselectAllFilters()">Deselect All</button>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="history-terminal" id="historyTerminal">
+                            <p class="text-muted text-center py-5">Select a device and date to view history</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- LLM Analysis Panel -->
+                <div class="llm-panel mt-3">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-robot me-2 text-info"></i>LLM Log Analysis</span>
+                        <div class="d-flex gap-2 align-items-center">
+                            <select class="form-select form-select-sm" id="llmModel" style="width: auto; background: var(--bg-dark); color: var(--text-primary); border-color: var(--border-color);">
+                                <option>Loading models...</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-2">
+                            <textarea class="form-control" id="llmPrompt" rows="2" 
+                                style="background: var(--bg-dark); color: var(--text-primary); border-color: var(--border-color); font-family: 'JetBrains Mono', monospace;"
+                                placeholder="Custom prompt (optional)...">Analyze these serial logs. Identify any errors, warnings, or unusual patterns. Summarize key events and any issues found.</textarea>
+                        </div>
+                        <div class="d-flex gap-2 mb-3">
+                            <button class="btn btn-info btn-sm" onclick="analyzeAllLogs()">
+                                <i class="bi bi-cpu me-1"></i>Analyze All Loaded Logs
+                            </button>
+                            <button class="btn btn-outline-info btn-sm" onclick="analyzeRecentLogs()">
+                                <i class="bi bi-check2-square me-1"></i>Analyze Last 100 Lines
+                            </button>
+                        </div>
+                        <div class="llm-response" id="llmResponse">
+                            Response will appear here...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Theme Toggle Button -->
+    <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Switch Theme">
+        <i class="bi bi-moon-fill"></i>
+    </button>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/theme.js"></script>
+    <script>
+        let devices = [];
+        let selectedMacs = []; // Changed to array for multi-select
+        let selectedDate = null;
+        let currentOffset = 0;
+        let totalMessages = 0;
+        let allMessages = []; // Store all loaded messages for filtering
+        let lastMessageTimestamp = null; // Track last message timestamp for auto-refresh
+        let autoRefreshInterval = null; // Interval for auto-refresh
+        let isAutoScrolling = true; // Track if we should auto-scroll
+        let isSearchingOrFiltering = false; // Track if we're searching/filtering (load all)
+        
+        // Check URL params for pre-selected device
+        const urlParams = new URLSearchParams(window.location.search);
+        const paramMac = urlParams.get('mac');
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            await loadDevices();
+            if (paramMac) {
+                // For URL param, select the device (add to selectedMacs)
+                if (!selectedMacs.includes(paramMac)) {
+                    selectedMacs.push(paramMac);
+                    renderDeviceList();
+                    await updateDateList();
+                }
+            }
+            
+            // Add scroll listener to detect manual scrolling
+            const terminal = document.getElementById('historyTerminal');
+            terminal.addEventListener('scroll', () => {
+                const isAtBottom = terminal.scrollHeight - terminal.scrollTop <= terminal.clientHeight + 10;
+                // Re-enable auto-scrolling if user scrolls back to bottom
+                if (isAtBottom) {
+                    isAutoScrolling = true;
+                } else {
+                    // Disable auto-scrolling if user scrolls up
+                    isAutoScrolling = false;
+                }
+            });
+        });
+
+        async function api(endpoint) {
+            const response = await fetch(`/api${endpoint}`);
+            return response.json();
+        }
+
+        let deviceAliases = {};
+
+        async function loadDevices() {
+            devices = await api('/serial/history');
+            deviceAliases = await api('/device-aliases');
+            renderDeviceList();
+        }
+
+        function renderDeviceList() {
+            const container = document.getElementById('deviceList');
+            
+            if (devices.length === 0) {
+                container.innerHTML = '<p class="text-muted small">No history available</p>';
+                return;
+            }
+            
+            container.innerHTML = devices.map(dev => {
+                const deviceName = deviceAliases[dev.mac] || dev.mac;
+                const isSelected = selectedMacs.includes(dev.mac);
+                return `
+                    <div class="date-item ${isSelected ? 'active' : ''}" style="cursor: pointer;">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="form-check flex-grow-1" onclick="toggleDevice('${dev.mac}', event)" style="cursor: pointer;">
+                                <input class="form-check-input" type="checkbox" id="device-${dev.mac}" 
+                                       ${isSelected ? 'checked' : ''} 
+                                       onchange="toggleDevice('${dev.mac}', event)"
+                                       onclick="event.stopPropagation();">
+                                <label class="form-check-label" for="device-${dev.mac}" style="cursor: pointer; width: 100%;">
+                                    <div class="fw-bold small">${escapeHtml(deviceName)}</div>
+                                    <div class="small text-muted font-monospace">${escapeHtml(dev.mac)} • ${dev.total_dates} days</div>
+                                </label>
+                            </div>
+                            <button class="btn btn-sm btn-outline-danger ms-2" 
+                                    onclick="deleteDevice('${dev.mac}', event)" 
+                                    title="Delete device and all history"
+                                    style="flex-shrink: 0;">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        function toggleDevice(mac, event) {
+            // Prevent double-toggling when clicking the checkbox directly
+            if (event && event.target.type === 'checkbox') {
+                // The checkbox change event will handle it
+                return;
+            }
+            
+            // Don't toggle if clicking on delete button
+            if (event && event.target.closest('.btn-outline-danger')) {
+                return;
+            }
+            
+            const index = selectedMacs.indexOf(mac);
+            if (index > -1) {
+                selectedMacs.splice(index, 1);
+            } else {
+                selectedMacs.push(mac);
+            }
+            
+            renderDeviceList();
+            
+            // If we have selected devices and a date, load history
+            if (selectedMacs.length > 0 && selectedDate) {
+                loadHistory();
+            } else if (selectedMacs.length === 0) {
+                // Clear history if no devices selected
+                const terminal = document.getElementById('historyTerminal');
+                terminal.innerHTML = '<p class="text-muted text-center py-5">Select one or more devices and a date to view history</p>';
+                document.getElementById('historyTitle').innerHTML = '<i class="bi bi-clock-history me-2"></i>Select a device and date';
+                document.getElementById('messageCount').textContent = '0 messages';
+                document.getElementById('loadMoreBtn').style.display = 'none';
+                document.getElementById('jumpToLatestBtn').style.display = 'none';
+            }
+        }
+        
+        async function deleteDevice(mac, event) {
+            // Stop event propagation to prevent toggling device selection
+            if (event) {
+                event.stopPropagation();
+            }
+            
+            const deviceName = deviceAliases[mac] || mac;
+            const confirmMessage = `Are you sure you want to delete device "${deviceName}" (${mac})?\n\nThis will permanently delete:\n- All history logs for this device\n- Device alias\n- All session data\n\nThis action cannot be undone.`;
+            
+            if (!confirm(confirmMessage)) {
+                return;
+            }
+            
+            try {
+                // Call the delete API
+                const response = await fetch(`/api/serial/device/${mac}`, {
+                    method: 'DELETE'
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Failed to delete device');
+                }
+                
+                // Remove from selected devices if it was selected
+                const index = selectedMacs.indexOf(mac);
+                if (index > -1) {
+                    selectedMacs.splice(index, 1);
+                }
+                
+                // Reload devices list
+                await loadDevices();
+                
+                // Clear history display if the deleted device was selected
+                if (index > -1) {
+                    if (selectedMacs.length === 0) {
+                        const terminal = document.getElementById('historyTerminal');
+                        terminal.innerHTML = '<p class="text-muted text-center py-5">Select one or more devices and a date to view history</p>';
+                        document.getElementById('historyTitle').innerHTML = '<i class="bi bi-clock-history me-2"></i>Select a device and date';
+                        document.getElementById('messageCount').textContent = '0 messages';
+                        document.getElementById('loadMoreBtn').style.display = 'none';
+                        document.getElementById('jumpToLatestBtn').style.display = 'none';
+                        document.getElementById('dateSelector').style.display = 'none';
+                        selectedDate = null;
+                    } else {
+                        // Reload history with remaining selected devices
+                        await loadHistory();
+                    }
+                }
+                
+                // Stop auto-refresh
+                stopAutoRefresh();
+                
+            } catch (error) {
+                alert(`Error deleting device: ${error.message}`);
+                console.error('Delete device error:', error);
+            }
+        }
+
+        async function updateDateList() {
+            if (selectedMacs.length === 0) {
+                document.getElementById('dateSelector').style.display = 'none';
+                return;
+            }
+            
+            // Get all unique dates from all selected devices
+            let allDates = new Set();
+            for (const mac of selectedMacs) {
+                const dates = await api(`/serial/history/${mac}/dates`);
+                dates.forEach(d => allDates.add(d));
+            }
+            
+            const sortedDates = Array.from(allDates).sort().reverse();
+            document.getElementById('dateSelector').style.display = 'block';
+            
+            const dateList = document.getElementById('dateList');
+            if (sortedDates.length === 0) {
+                dateList.innerHTML = '<p class="text-muted small">No dates available</p>';
+            } else {
+                dateList.innerHTML = sortedDates.map(d => `
+                    <div class="date-item ${selectedDate === d ? 'active' : ''}" onclick="selectDate('${d}')">
+                        ${d}
+                    </div>
+                `).join('');
+                
+                // Auto-select first date if none selected
+                if (!selectedDate && sortedDates.length > 0) {
+                    selectDate(sortedDates[0]);
+                }
+            }
+        }
+
+        async function selectDate(dateStr) {
+            selectedDate = dateStr;
+            currentOffset = 0;
+            lastMessageTimestamp = null;
+            isAutoScrolling = true;
+            
+            // Stop auto-refresh for previous date
+            stopAutoRefresh();
+            
+            // Update date list UI
+            document.querySelectorAll('#dateList .date-item').forEach(el => {
+                el.classList.toggle('active', el.textContent.trim() === dateStr);
+            });
+            
+            await loadHistory();
+            
+            // Start auto-refresh if viewing today's date and we have selected devices
+            const today = new Date().toISOString().split('T')[0];
+            if (dateStr === today && selectedMacs.length > 0) {
+                startAutoRefresh();
+            }
+        }
+
+        function formatTimestamp(timestamp) {
+            if (!timestamp) return '';
+            
+            try {
+                const msgDate = new Date(timestamp);
+                const today = new Date();
+                
+                // Check if the message is from today
+                const isToday = msgDate.getFullYear() === today.getFullYear() &&
+                               msgDate.getMonth() === today.getMonth() &&
+                               msgDate.getDate() === today.getDate();
+                
+                if (isToday) {
+                    // For today, show only HH:MM:SS
+                    const hours = String(msgDate.getHours()).padStart(2, '0');
+                    const minutes = String(msgDate.getMinutes()).padStart(2, '0');
+                    const seconds = String(msgDate.getSeconds()).padStart(2, '0');
+                    return `${hours}:${minutes}:${seconds}`;
+                } else {
+                    // For older messages, show full date time
+                    return timestamp;
+                }
+            } catch (e) {
+                // If parsing fails, return original timestamp
+                return timestamp;
+            }
+        }
+
+        function extractMessageType(msg) {
+            // Try to parse the message as JSON to extract the 'ty' field
+            // Some messages may contain multiple JSON objects, so try to find the first one
+            let msgText = msg.msg;
+            
+            // Try to find JSON objects in the message
+            const jsonMatches = msgText.match(/\{[^{}]*"ty"[^{}]*\}/g);
+            if (jsonMatches) {
+                for (const jsonStr of jsonMatches) {
+                    try {
+                        const parsed = JSON.parse(jsonStr);
+                        if (parsed && parsed.ty) {
+                            return parsed.ty.toLowerCase();
+                        }
+                    } catch (e) {
+                        continue;
+                    }
+                }
+            }
+            
+            // Try parsing the entire message as JSON
+            try {
+                const parsed = JSON.parse(msgText);
+                if (parsed && parsed.ty) {
+                    return parsed.ty.toLowerCase();
+                }
+            } catch (e) {
+                // Not JSON, check if it's a plain text error/warning
+                const msgLower = msgText.toLowerCase();
+                if (msgLower.includes('error') || msg.type === 'error') return 'error';
+                if (msgLower.includes('warning')) return 'warning';
+                if (msgLower.includes('fatal')) return 'fatal';
+            }
+            
+            // Fallback to the message type field
+            return msg.type || 'unknown';
+        }
+
+        function renderMessages(messages) {
+            const terminal = document.getElementById('historyTerminal');
+            
+            if (messages.length === 0) {
+                terminal.innerHTML = '<p class="text-muted text-center py-5">No messages match the current filters</p>';
+                return;
+            }
+            
+            // Check if we were at the bottom before rendering
+            const wasAtBottom = terminal.scrollHeight - terminal.scrollTop <= terminal.clientHeight + 10;
+            
+            const html = messages.map((msg, index) => {
+                const msgType = extractMessageType(msg);
+                let msgClass = 'history-message';
+                
+                // Apply type-based styling
+                if (msg.type === 'sent') msgClass += ' sent';
+                else if (msg.type === 'error') msgClass += ' error';
+                else if (msgType === 'health') msgClass += ' health';
+                else if (msgType === 'warning') msgClass += ' warning';
+                else if (msgType === 'fatal') msgClass += ' fatal';
+                else if (msgType === 'error') msgClass += ' error';
+                else if (msgType === 'info') msgClass += ' info';
+                else if (msgType === 'event') msgClass += ' event';
+                else if (msgType === 'config') msgClass += ' config';
+                
+                const formattedTimestamp = formatTimestamp(msg.ts);
+                
+                // Show device MAC if multiple devices selected
+                const deviceMac = msg.device_mac || '';
+                const deviceName = deviceMac ? (deviceAliases[deviceMac] || deviceMac) : '';
+                const deviceDisplay = selectedMacs.length > 1 && deviceName 
+                    ? `<span class="small text-muted" style="min-width: 100px; flex-shrink: 0;">${escapeHtml(deviceName)}</span>`
+                    : '';
+                
+                return `
+                    <div class="history-line" data-msg-type="${msgType}" data-msg-content="${escapeHtml(msg.msg).toLowerCase()}" data-index="${index}">
+                        <span class="history-timestamp">${formattedTimestamp}</span>
+                        ${deviceDisplay}
+                        <span class="history-port">${escapeHtml(msg.port)}</span>
+                        <span class="${msgClass}">${escapeHtml(msg.msg)}</span>
+                    </div>
+                `;
+            }).join('');
+            
+            terminal.innerHTML = html;
+            
+            // Auto-scroll to bottom if we were at the bottom or if auto-scrolling is enabled
+            if (isAutoScrolling || wasAtBottom) {
+                setTimeout(() => {
+                    terminal.scrollTop = terminal.scrollHeight;
+                }, 0);
+            }
+        }
+
+        async function applyFilters() {
+            const searchTerm = document.getElementById('searchBox').value.toLowerCase().trim();
+            const showEverything = document.getElementById('filterEverything').checked;
+            const filters = {
+                health: document.getElementById('filterHealth').checked,
+                warning: document.getElementById('filterWarning').checked,
+                fatal: document.getElementById('filterFatal').checked,
+                error: document.getElementById('filterError').checked,
+                info: document.getElementById('filterInfo').checked,
+                event: document.getElementById('filterEvent').checked,
+                config: document.getElementById('filterConfig').checked
+            };
+            
+            // Check if we need to load entire file (search or filters active)
+            const hasSearch = searchTerm.length > 0;
+            const hasActiveFilters = !showEverything || !filters.health || !filters.warning || !filters.fatal || 
+                                   !filters.error || !filters.info || !filters.event || !filters.config;
+            const needsFullLoad = hasSearch || hasActiveFilters;
+            
+            // If we need full load and haven't loaded everything yet, reload
+            if (needsFullLoad && !isSearchingOrFiltering && selectedMacs.length > 0 && selectedDate) {
+                isSearchingOrFiltering = true;
+                currentOffset = 0;
+                await loadHistory();
+                isSearchingOrFiltering = false;
+            }
+            
+            // Define which types are "specific" filter types
+            const specificTypes = ['health', 'warning', 'fatal', 'error', 'info', 'event', 'config'];
+            
+            const lines = document.querySelectorAll('.history-line');
+            let visibleCount = 0;
+            
+            lines.forEach((line, index) => {
+                const msgType = line.getAttribute('data-msg-type') || 'unknown';
+                const msgContent = line.getAttribute('data-msg-content') || '';
+                
+                // Check if message type is a specific filter type
+                const isSpecificType = specificTypes.includes(msgType);
+                
+                // Check if message type matches selected filters
+                let typeMatch = false;
+                
+                if (isSpecificType) {
+                    // For specific types, only show if that filter is checked
+                    if (msgType === 'health' && filters.health) typeMatch = true;
+                    else if (msgType === 'warning' && filters.warning) typeMatch = true;
+                    else if (msgType === 'fatal' && filters.fatal) typeMatch = true;
+                    else if (msgType === 'error' && filters.error) typeMatch = true;
+                    else if (msgType === 'info' && filters.info) typeMatch = true;
+                    else if (msgType === 'event' && filters.event) typeMatch = true;
+                    else if (msgType === 'config' && filters.config) typeMatch = true;
+                } else {
+                    // For non-specific types (like 'short', 'sent', 'received', etc.), only show if "Everything" is checked
+                    typeMatch = showEverything;
+                }
+                
+                // Check if message content matches search
+                const searchMatch = !searchTerm || msgContent.includes(searchTerm);
+                
+                // Show/hide line
+                if (typeMatch && searchMatch) {
+                    line.classList.remove('hidden');
+                    if (searchTerm) {
+                        line.classList.add('highlight');
+                    } else {
+                        line.classList.remove('highlight');
+                    }
+                    visibleCount++;
+                } else {
+                    line.classList.add('hidden');
+                    line.classList.remove('highlight');
+                }
+            });
+            
+            // Update message count - show visible count and total in log file
+            const totalInLog = totalMessages;
+            const showingText = searchTerm || hasActiveFilters 
+                ? `${visibleCount} of ${totalInLog} messages` 
+                : `${allMessages.length} of ${totalInLog} messages`;
+            document.getElementById('messageCount').textContent = showingText;
+        }
+
+        function selectAllFilters() {
+            document.getElementById('filterEverything').checked = true;
+            document.getElementById('filterHealth').checked = true;
+            document.getElementById('filterWarning').checked = true;
+            document.getElementById('filterFatal').checked = true;
+            document.getElementById('filterError').checked = true;
+            document.getElementById('filterInfo').checked = true;
+            document.getElementById('filterEvent').checked = true;
+            document.getElementById('filterConfig').checked = true;
+            applyFilters();
+        }
+
+        function deselectAllFilters() {
+            document.getElementById('filterEverything').checked = false;
+            document.getElementById('filterHealth').checked = false;
+            document.getElementById('filterWarning').checked = false;
+            document.getElementById('filterFatal').checked = false;
+            document.getElementById('filterError').checked = false;
+            document.getElementById('filterInfo').checked = false;
+            document.getElementById('filterEvent').checked = false;
+            document.getElementById('filterConfig').checked = false;
+            applyFilters();
+        }
+
+        async function jumpToLatest() {
+            if (selectedMacs.length === 0 || !selectedDate) return;
+            
+            // Reset offset and reload latest messages
+            currentOffset = 0;
+            isAutoScrolling = true;
+            isSearchingOrFiltering = false; // Reset search/filter state
+            await loadHistory();
+            
+            // Scroll to bottom
+            const terminal = document.getElementById('historyTerminal');
+            setTimeout(() => {
+                terminal.scrollTop = terminal.scrollHeight;
+            }, 100);
+        }
+
+        async function loadHistory(appendOnly = false) {
+            if (selectedMacs.length === 0 || !selectedDate) return;
+            
+            // Determine if we should load all messages (for search/filter)
+            const shouldLoadAll = isSearchingOrFiltering;
+            const limit = shouldLoadAll ? 'all' : 500;
+            
+            let data;
+            if (selectedMacs.length === 1) {
+                // Single device - use existing endpoint
+                data = await api(`/serial/history/${selectedMacs[0]}/${selectedDate}?offset=${currentOffset}&limit=${limit}`);
+            } else {
+                // Multiple devices - use new endpoint
+                const response = await fetch('/api/serial/history/multiple', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        macs: selectedMacs,
+                        date: selectedDate,
+                        offset: currentOffset,
+                        limit: limit
+                    })
+                });
+                data = await response.json();
+            }
+            
+            totalMessages = data.total;
+            
+            // Update title with device names
+            const deviceNames = selectedMacs.map(mac => {
+                const name = deviceAliases[mac] || mac;
+                return escapeHtml(name);
+            }).join(', ');
+            const deviceMacs = selectedMacs.length === 1 
+                ? `<span class="small text-muted font-monospace">(${escapeHtml(selectedMacs[0])})</span>`
+                : `<span class="small text-muted font-monospace">(${selectedMacs.length} devices)</span>`;
+            document.getElementById('historyTitle').innerHTML = `<i class="bi bi-clock-history me-2"></i>${deviceNames} ${deviceMacs} - ${selectedDate}`;
+            
+            const isInitialLoad = currentOffset === 0 && !appendOnly;
+            
+            if (isInitialLoad) {
+                allMessages = [];
+            }
+            
+            // Track if we have new messages
+            let hasNewMessages = false;
+            if (data.messages.length > 0) {
+                if (appendOnly && allMessages.length > 0) {
+                    // Check if we have new messages by comparing timestamps
+                    const lastExistingTs = allMessages[allMessages.length - 1].ts;
+                    const newMessages = data.messages.filter(msg => {
+                        // Compare timestamps - if new message is newer, it's new
+                        return !allMessages.some(existing => existing.ts === msg.ts && existing.msg === msg.msg && existing.device_mac === msg.device_mac);
+                    });
+                    
+                    if (newMessages.length > 0) {
+                        allMessages.push(...newMessages);
+                        hasNewMessages = true;
+                    }
+                } else {
+                    // Add all messages (initial load or load more)
+                    allMessages.push(...data.messages);
+                }
+            }
+            
+            // Update last message timestamp
+            if (allMessages.length > 0) {
+                lastMessageTimestamp = allMessages[allMessages.length - 1].ts;
+            }
+            
+            // On initial load, always scroll to bottom
+            if (isInitialLoad) {
+                isAutoScrolling = true;
+            }
+            
+            // Render all messages
+            renderMessages(allMessages);
+            
+            // Apply current filters (but don't reload if we just loaded)
+            if (!shouldLoadAll) {
+                applyFiltersWithoutReload();
+            } else {
+                applyFilters();
+            }
+            
+            // Show/hide buttons
+            const loadMoreBtn = document.getElementById('loadMoreBtn');
+            const jumpToLatestBtn = document.getElementById('jumpToLatestBtn');
+            if (!shouldLoadAll && currentOffset + data.messages.length < data.total) {
+                loadMoreBtn.style.display = 'inline-block';
+            } else {
+                loadMoreBtn.style.display = 'none';
+            }
+            if (allMessages.length > 0) {
+                jumpToLatestBtn.style.display = 'inline-block';
+            } else {
+                jumpToLatestBtn.style.display = 'none';
+            }
+            
+            if (allMessages.length === 0) {
+                const terminal = document.getElementById('historyTerminal');
+                terminal.innerHTML = '<p class="text-muted text-center py-5">No messages for this date</p>';
+            }
+            
+            return hasNewMessages;
+        }
+        
+        function applyFiltersWithoutReload() {
+            // Same as applyFilters but without the reload logic
+            const searchTerm = document.getElementById('searchBox').value.toLowerCase().trim();
+            const showEverything = document.getElementById('filterEverything').checked;
+            const filters = {
+                health: document.getElementById('filterHealth').checked,
+                warning: document.getElementById('filterWarning').checked,
+                fatal: document.getElementById('filterFatal').checked,
+                error: document.getElementById('filterError').checked,
+                info: document.getElementById('filterInfo').checked,
+                event: document.getElementById('filterEvent').checked,
+                config: document.getElementById('filterConfig').checked
+            };
+            
+            const specificTypes = ['health', 'warning', 'fatal', 'error', 'info', 'event', 'config'];
+            const lines = document.querySelectorAll('.history-line');
+            let visibleCount = 0;
+            
+            lines.forEach((line) => {
+                const msgType = line.getAttribute('data-msg-type') || 'unknown';
+                const msgContent = line.getAttribute('data-msg-content') || '';
+                
+                const isSpecificType = specificTypes.includes(msgType);
+                let typeMatch = false;
+                
+                if (isSpecificType) {
+                    if (msgType === 'health' && filters.health) typeMatch = true;
+                    else if (msgType === 'warning' && filters.warning) typeMatch = true;
+                    else if (msgType === 'fatal' && filters.fatal) typeMatch = true;
+                    else if (msgType === 'error' && filters.error) typeMatch = true;
+                    else if (msgType === 'info' && filters.info) typeMatch = true;
+                    else if (msgType === 'event' && filters.event) typeMatch = true;
+                    else if (msgType === 'config' && filters.config) typeMatch = true;
+                } else {
+                    typeMatch = showEverything;
+                }
+                
+                const searchMatch = !searchTerm || msgContent.includes(searchTerm);
+                
+                if (typeMatch && searchMatch) {
+                    line.classList.remove('hidden');
+                    if (searchTerm) {
+                        line.classList.add('highlight');
+                    } else {
+                        line.classList.remove('highlight');
+                    }
+                    visibleCount++;
+                } else {
+                    line.classList.add('hidden');
+                    line.classList.remove('highlight');
+                }
+            });
+            
+            const showingText = `${visibleCount} of ${totalMessages} messages`;
+            document.getElementById('messageCount').textContent = showingText;
+        }
+        
+        async function checkForNewMessages() {
+            if (selectedMacs.length === 0 || !selectedDate) return;
+            
+            // Check if we're viewing today's date
+            const today = new Date().toISOString().split('T')[0];
+            if (selectedDate !== today) {
+                // Only auto-refresh for today's messages
+                return;
+            }
+            
+            // Get the latest messages (last 100 to check for new ones)
+            let data;
+            if (selectedMacs.length === 1) {
+                data = await api(`/serial/history/${selectedMacs[0]}/${selectedDate}?offset=0&limit=100`);
+            } else {
+                const response = await fetch('/api/serial/history/multiple', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        macs: selectedMacs,
+                        date: selectedDate,
+                        offset: 0,
+                        limit: 100
+                    })
+                });
+                data = await response.json();
+            }
+            
+            if (data.messages.length === 0) return;
+            
+            // Check if we have new messages
+            const latestMessage = data.messages[data.messages.length - 1];
+            if (lastMessageTimestamp && latestMessage.ts <= lastMessageTimestamp) {
+                // No new messages
+                return;
+            }
+            
+            // We have new messages - reload from the beginning to get all new messages
+            const previousCount = allMessages.length;
+            currentOffset = 0;
+            await loadHistory();
+            
+            // If we got new messages and user was at bottom, scroll to bottom
+            if (allMessages.length > previousCount) {
+                const terminal = document.getElementById('historyTerminal');
+                const wasAtBottom = terminal.scrollHeight - terminal.scrollTop <= terminal.clientHeight + 10;
+                if (wasAtBottom || isAutoScrolling) {
+                    setTimeout(() => {
+                        terminal.scrollTop = terminal.scrollHeight;
+                    }, 100);
+                }
+            }
+        }
+        
+        function startAutoRefresh() {
+            // Clear existing interval
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+            }
+            
+            // Check for new messages every 2 seconds
+            autoRefreshInterval = setInterval(checkForNewMessages, 2000);
+        }
+        
+        function stopAutoRefresh() {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+                autoRefreshInterval = null;
+            }
+        }
+
+        async function loadMore() {
+            // Disable auto-scrolling when loading older messages
+            isAutoScrolling = false;
+            currentOffset += 500;
+            await loadHistory();
+        }
+        
+        // Update date list when device selection changes
+        document.addEventListener('change', async (e) => {
+            if (e.target && e.target.id && e.target.id.startsWith('device-')) {
+                const mac = e.target.id.replace('device-', '');
+                toggleDevice(mac, e);
+                await updateDateList();
+            }
+        });
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // LLM Functions
+        async function loadLlmModels() {
+            try {
+                const response = await fetch('/api/llm/models');
+                const models = await response.json();
+                const select = document.getElementById('llmModel');
+                if (Array.isArray(models) && models.length > 0) {
+                    select.innerHTML = models.map(m => `<option value="${m}">${m}</option>`).join('');
+                } else {
+                    select.innerHTML = '<option>No models found</option>';
+                }
+            } catch (e) {
+                document.getElementById('llmModel').innerHTML = '<option>Error loading models</option>';
+            }
+        }
+
+        async function analyzeAllLogs() {
+            const terminal = document.getElementById('historyTerminal');
+            const lines = terminal.querySelectorAll('.history-line');
+            const logs = Array.from(lines).map(l => l.textContent).join('\n');
+            if (!logs.trim()) {
+                document.getElementById('llmResponse').textContent = 'No logs loaded. Please select a device and date first.';
+                return;
+            }
+            await sendToLlm(logs);
+        }
+
+        async function analyzeRecentLogs() {
+            const terminal = document.getElementById('historyTerminal');
+            const lines = terminal.querySelectorAll('.history-line');
+            const lastLines = Array.from(lines).slice(-100).map(l => l.textContent).join('\n');
+            if (!lastLines.trim()) {
+                document.getElementById('llmResponse').textContent = 'No logs loaded. Please select a device and date first.';
+                return;
+            }
+            await sendToLlm(lastLines);
+        }
+
+        async function sendToLlm(logs) {
+            const responseEl = document.getElementById('llmResponse');
+            const prompt = document.getElementById('llmPrompt').value;
+            const model = document.getElementById('llmModel').value;
+            
+            responseEl.textContent = 'Analyzing logs...';
+            responseEl.classList.add('loading');
+            
+            try {
+                const response = await fetch('/api/llm/analyze', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ logs, prompt, model })
+                });
+                const result = await response.json();
+                responseEl.classList.remove('loading');
+                if (result.error) {
+                    responseEl.textContent = 'Error: ' + result.error;
+                } else {
+                    responseEl.textContent = result.response;
+                }
+            } catch (e) {
+                responseEl.classList.remove('loading');
+                responseEl.textContent = 'Error: ' + e.message;
+            }
+        }
+
+        // Load LLM models on page load
+        loadLlmModels();
+    </script>
+</body>
+</html>
+

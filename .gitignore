@@ -1,0 +1,26 @@
+# --- Python bytecode ---
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+
+# --- Logs ---
+logs/
+*.log
+
+# --- App artifacts ---
+sessions/
+last_port.txt
+
+# --- Virtual envs (optional) ---
+.venv/
+venv/
+env/
+
+# --- OS cruft (optional) ---
+.DS_Store
+Thumbs.db
+
+*.json
+*.jsonl
+stats/

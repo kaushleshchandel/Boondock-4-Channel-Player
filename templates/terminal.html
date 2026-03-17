@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Terminal - Boondock Monitor</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="/static/css/style.css" rel="stylesheet">
+    <style>
+        .tab-nav {
+            background: var(--bg-card);
+            border-bottom: 2px solid var(--border-color);
+        }
+        .tab-nav .nav-link {
+            color: var(--text-secondary);
+            border: none;
+            border-bottom: 3px solid transparent;
+            border-radius: 0;
+            padding: 1rem 2rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .tab-nav .nav-link:hover {
+            color: var(--text-primary);
+            background: var(--hover-bg);
+        }
+        .tab-nav .nav-link.active {
+            color: var(--accent-primary);
+            border-bottom-color: var(--accent-primary);
+            background: transparent;
+        }
+        
+        .device-list {
+            overflow-y: auto;
+            flex: 1 1 auto;
+        }
+        
+        .device-item {
+            background: var(--bg-dark);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 0.75rem 1rem;
+            margin-bottom: 0.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            transition: all 0.2s;
+            gap: 0.5rem;
+        }
+        .device-item:hover {
+            border-color: var(--accent-primary);
+            background: var(--hover-bg);
+        }
+        .device-item.connected {
+            border-color: var(--accent-success);
+            background: var(--hover-bg);
+        }
+        
+        .terminal {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            height: calc(100vh - 380px);
+            min-height: 300px;
+            overflow-y: auto;
+            padding: 0.5rem;
+        }
+        
+        .terminal-line {
+            padding: 2px 0;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            gap: 1rem;
+        }
+        .terminal-line:hover {
+            background: var(--hover-bg);
+        }
+        
+        .terminal-timestamp {
+            color: var(--text-secondary);
+            min-width: 90px;
+            flex-shrink: 0;
+        }
+        .terminal-port {
+            color: var(--accent-info);
+            min-width: 70px;
+            flex-shrink: 0;
+        }
+        .terminal-message {
+            color: var(--accent-success);
+            word-break: break-all;
+            flex: 1;
+        }
+        .terminal-message.sent {
+            color: var(--accent-warning);
+        }
+        .terminal-message.error {
+            color: var(--accent-danger);
+        }
+        
+        .command-input {
+            background: var(--bg-dark) !important;
+            border: 2px solid var(--border-color) !important;
+            color: var(--text-primary) !important;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .command-input:focus {
+            border-color: var(--accent-primary) !important;
+            box-shadow: 0 0 10px var(--hover-bg) !important;
+        }
+        
+        /* LLM Analysis Panel */
+        .llm-panel {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            margin-top: 1rem;
+            box-shadow: 0 2px 10px var(--shadow);
+        }
+        .llm-response {
+            background: var(--bg-dark);
+            border-radius: 6px;
+            padding: 1rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+            color: var(--text-primary);
+        }
+        .llm-response.loading {
+            color: var(--accent-info);
+        }
+    </style>
+</head>
+<body>
+    <!-- Tab Navigation -->
+    <nav class="tab-nav">
+        <div class="container-fluid d-flex justify-content-between align-items-center">
+            <!-- Mobile hamburger -->
+            <button class="btn btn-outline-light d-md-none hamburger-btn" type="button" data-bs-toggle="offcanvas" data-bs-target="#mobileMenu">
+                <i class="bi bi-list fs-4"></i>
+            </button>
+            
+            <!-- Desktop nav -->
+            <ul class="nav d-none d-md-flex">
+                <li class="nav-item">
+                    <a class="nav-link" href="/">
+                        <i class="bi bi-soundwave me-2"></i>Boondock Monitor
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link active" href="/terminal">
+                        <i class="bi bi-terminal me-2"></i>Terminal
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/devices">
+                        <i class="bi bi-cpu me-2"></i>Devices
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/player">
+                        <i class="bi bi-play-circle me-2"></i>Player
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/history">
+                        <i class="bi bi-clock-history me-2"></i>History
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/sessions">
+                        <i class="bi bi-calendar-event me-2"></i>Sessions
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/firmware">
+                        <i class="bi bi-memory me-2"></i>Firmware
+                    </a>
+                </li>
+            </ul>
+            
+            <!-- Mobile title -->
+            <span class="d-md-none text-light fw-bold">Terminal</span>
+            <span class="d-md-none"></span>
+        </div>
+    </nav>
+    
+    <!-- Mobile Navigation Offcanvas -->
+    <div class="offcanvas offcanvas-start bg-dark" tabindex="-1" id="mobileMenu">
+        <div class="offcanvas-header border-bottom border-secondary">
+            <h5 class="offcanvas-title text-light">Navigation</h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas"></button>
+        </div>
+        <div class="offcanvas-body">
+            <nav class="nav flex-column">
+                <a class="nav-link text-light py-3 border-bottom border-secondary" href="/">
+                    <i class="bi bi-soundwave me-3"></i>Boondock Monitor
+                </a>
+                <a class="nav-link text-light py-3 border-bottom border-secondary active" href="/terminal">
+                    <i class="bi bi-terminal me-3"></i>Terminal
+                </a>
+                <a class="nav-link text-light py-3 border-bottom border-secondary" href="/devices">
+                    <i class="bi bi-cpu me-3"></i>Devices
+                </a>
+                <a class="nav-link text-light py-3 border-bottom border-secondary" href="/player">
+                    <i class="bi bi-play-circle me-3"></i>Player
+                </a>
+                <a class="nav-link text-light py-3 border-bottom border-secondary" href="/history">
+                    <i class="bi bi-clock-history me-3"></i>History
+                </a>
+                <a class="nav-link text-light py-3 border-bottom border-secondary" href="/sessions">
+                    <i class="bi bi-calendar-event me-3"></i>Sessions
+                </a>
+                <a class="nav-link text-light py-3 border-bottom border-secondary" href="/firmware">
+                    <i class="bi bi-memory me-3"></i>Firmware
+                </a>
+            </nav>
+        </div>
+    </div>
+
+    <div class="container-fluid py-3">
+        <div class="row">
+            <!-- Device List Panel -->
+            <div class="col-md-3">
+                <div class="card d-flex flex-column" style="height: calc(100vh - 150px);">
+                    <div class="card-header d-flex justify-content-between align-items-center flex-shrink-0">
+                        <span><i class="bi bi-usb-drive me-2 text-warning"></i>Serial Devices</span>
+                        <button class="btn btn-sm btn-outline-light" onclick="refreshSerialDevices()">
+                            <i class="bi bi-arrow-clockwise"></i>
+                        </button>
+                    </div>
+                    <div class="card-body d-flex flex-column flex-grow-1" style="overflow: hidden;">
+                        <div class="device-list flex-grow-1" id="serialDeviceList" style="overflow-y: auto;">
+                            <p class="text-muted text-center">Loading...</p>
+                        </div>
+                        <div class="mt-3 d-flex gap-2 flex-shrink-0">
+                            <button class="btn btn-success btn-sm flex-grow-1" onclick="connectAll()">
+                                <i class="bi bi-plug me-1"></i>Connect All
+                            </button>
+                            <button class="btn btn-danger btn-sm flex-grow-1" onclick="disconnectAll()">
+                                <i class="bi bi-x-circle me-1"></i>Disconnect All
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Terminal Panel -->
+            <div class="col-md-9">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-terminal me-2 text-success"></i>Serial Monitor</span>
+                        <div class="d-flex gap-2">
+                            <span class="badge bg-success" id="connectedCount">0 connected</span>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="clearTerminal()">
+                                <i class="bi bi-trash me-1"></i>Clear
+                            </button>
+                            <div class="form-check form-switch d-flex align-items-center">
+                                <input class="form-check-input" type="checkbox" id="autoScroll" checked>
+                                <label class="form-check-label ms-2 small text-muted" for="autoScroll">Auto-scroll</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="terminal" id="terminal"></div>
+                    </div>
+                    <div class="card-footer">
+                        <div class="input-group">
+                            <input type="text" class="form-control command-input" id="commandInput" 
+                                   placeholder="Type command and press Enter..." 
+                                   onkeypress="handleCommandKey(event)">
+                            <button class="btn btn-success" onclick="sendCommand()">
+                                <i class="bi bi-send me-1"></i>Send
+                            </button>
+                        </div>
+                        <div class="mt-2 d-flex gap-2 align-items-center">
+                            <small class="text-muted">Send to:</small>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="sendTarget" id="sendAll" value="all" checked>
+                                <label class="form-check-label small text-muted" for="sendAll">All connected</label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="sendTarget" id="sendSelected" value="selected">
+                                <label class="form-check-label small text-muted" for="sendSelected">Selected only</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- LLM Analysis Panel -->
+                <div class="llm-panel mt-3">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-robot me-2 text-info"></i>LLM Log Analysis</span>
+                        <div class="d-flex gap-2 align-items-center">
+                            <select class="form-select form-select-sm" id="llmModel" style="width: auto; background: var(--bg-dark); color: var(--text-primary); border-color: var(--border-color);">
+                                <option>Loading models...</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-2">
+                            <textarea class="form-control command-input" id="llmPrompt" rows="2" 
+                                placeholder="Custom prompt (optional)...">Analyze these serial logs. Identify any errors, warnings, or unusual patterns. Summarize key events.</textarea>
+                        </div>
+                        <div class="d-flex gap-2 mb-3">
+                            <button class="btn btn-info btn-sm" onclick="analyzeLogs()">
+                                <i class="bi bi-cpu me-1"></i>Analyze Visible Logs
+                            </button>
+                            <button class="btn btn-outline-info btn-sm" onclick="analyzeSelectedLogs()">
+                                <i class="bi bi-check2-square me-1"></i>Analyze Last 50 Lines
+                            </button>
+                        </div>
+                        <div class="llm-response" id="llmResponse">
+                            Response will appear here...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Theme Toggle Button -->
+    <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Switch Theme">
+        <i class="bi bi-moon-fill"></i>
+    </button>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/theme.js"></script>
+    <script>
+        let serialDevices = [];
+        let deviceData = {}; // Store device data with MAC and names
+        let selectedPorts = new Set();
+        let lastTimestamp = null;
+        let pollInterval = null;
+        let deviceDataInterval = null;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            refreshSerialDevices();
+            loadDeviceData();
+            pollInterval = setInterval(pollMessages, 200);
+            deviceDataInterval = setInterval(loadDeviceData, 2000); // Refresh device data every 2 seconds
+        });
+
+        async function api(endpoint, method = 'GET', data = null) {
+            const options = {
+                method,
+                headers: { 'Content-Type': 'application/json' }
+            };
+            if (data) options.body = JSON.stringify(data);
+            const response = await fetch(`/api${endpoint}`, options);
+            return response.json();
+        }
+
+        async function loadDeviceData() {
+            try {
+                deviceData = await api('/serial/device-data');
+                renderDeviceList(); // Re-render when device data updates
+            } catch (e) {
+                console.error('Error loading device data', e);
+            }
+        }
+
+        async function refreshSerialDevices() {
+            serialDevices = await api('/serial/devices');
+            renderDeviceList();
+            updateConnectedCount();
+        }
+
+        function renderDeviceList() {
+            const container = document.getElementById('serialDeviceList');
+            
+            if (serialDevices.length === 0) {
+                container.innerHTML = '<p class="text-muted text-center small">No serial devices found</p>';
+                return;
+            }
+            
+            container.innerHTML = serialDevices.map(dev => {
+                // Find device data for this port
+                let deviceInfo = null;
+                for (const [key, data] of Object.entries(deviceData)) {
+                    if (data.port === dev.port) {
+                        deviceInfo = data;
+                        break;
+                    }
+                }
+                
+                const mac = deviceInfo?.mac || '';
+                const deviceName = deviceInfo?.name || '';
+                const displayMac = mac ? mac.match(/.{1,2}/g)?.join(':') || mac : 'Not detected';
+                
+                return `
+                <div class="device-item ${dev.connected ? 'connected' : ''}" data-port="${dev.port}">
+                    <div class="flex-grow-1" style="min-width: 0;">
+                        <div class="fw-bold small text-truncate" title="${escapeHtml(dev.port)}">
+                            <i class="bi bi-usb-symbol me-1 text-warning"></i>${escapeHtml(dev.port)}
+                        </div>
+                        ${mac ? `
+                            <div class="small text-muted mt-1" style="font-size: 0.7rem;">
+                                <i class="bi bi-hash me-1"></i><span class="font-monospace">${escapeHtml(displayMac)}</span>
+                            </div>
+                        ` : ''}
+                        ${deviceName ? `
+                            <div class="small text-info mt-1 text-truncate" style="font-size: 0.7rem;" title="${escapeHtml(deviceName)}">
+                                <i class="bi bi-tag me-1"></i>${escapeHtml(deviceName)}
+                            </div>
+                        ` : ''}
+                        <div class="small text-muted mt-1" style="font-size: 0.65rem;" title="${escapeHtml(dev.description)}">
+                            ${escapeHtml(dev.description.length > 30 ? dev.description.substring(0, 30) + '...' : dev.description)}
+                        </div>
+                    </div>
+                    <div class="d-flex gap-1 align-items-center flex-shrink-0">
+                        ${dev.connected ? `
+                            <input type="checkbox" class="form-check-input" 
+                                   onchange="togglePortSelection('${dev.port}', this.checked)"
+                                   ${selectedPorts.has(dev.port) ? 'checked' : ''}>
+                            <button class="btn btn-sm btn-outline-danger" onclick="disconnectPort('${dev.port}')" title="Disconnect">
+                                <i class="bi bi-x"></i>
+                            </button>
+                        ` : `
+                            <button class="btn btn-sm btn-outline-success" onclick="connectPort('${dev.port}')" title="Connect">
+                                <i class="bi bi-plug"></i>
+                            </button>
+                        `}
+                    </div>
+                </div>
+            `}).join('');
+        }
+
+        async function connectPort(port) {
+            await api('/serial/connect', 'POST', { port });
+            await refreshSerialDevices();
+        }
+
+        async function disconnectPort(port) {
+            await api('/serial/disconnect', 'POST', { port });
+            selectedPorts.delete(port);
+            await refreshSerialDevices();
+        }
+
+        async function connectAll() {
+            for (const dev of serialDevices) {
+                if (!dev.connected) {
+                    await api('/serial/connect', 'POST', { port: dev.port });
+                }
+            }
+            await refreshSerialDevices();
+        }
+
+        async function disconnectAll() {
+            await api('/serial/disconnect-all', 'POST');
+            selectedPorts.clear();
+            await refreshSerialDevices();
+        }
+
+        function togglePortSelection(port, checked) {
+            if (checked) {
+                selectedPorts.add(port);
+            } else {
+                selectedPorts.delete(port);
+            }
+        }
+
+        async function sendCommand() {
+            const input = document.getElementById('commandInput');
+            const message = input.value.trim();
+            if (!message) return;
+            
+            const sendTarget = document.querySelector('input[name="sendTarget"]:checked').value;
+            let ports = null;
+            
+            if (sendTarget === 'selected' && selectedPorts.size > 0) {
+                ports = Array.from(selectedPorts);
+            }
+            
+            await api('/serial/send', 'POST', { message, ports });
+            input.value = '';
+            input.focus();
+        }
+
+        function handleCommandKey(event) {
+            if (event.key === 'Enter') {
+                sendCommand();
+            }
+        }
+
+        async function pollMessages() {
+            const url = lastTimestamp ? `/serial/messages?since=${encodeURIComponent(lastTimestamp)}` : '/serial/messages';
+            const messages = await api(url);
+            
+            if (messages.length > 0) {
+                appendMessages(messages);
+                lastTimestamp = messages[messages.length - 1].timestamp;
+            }
+            
+            updateConnectedCount();
+        }
+
+        function appendMessages(messages) {
+            const terminal = document.getElementById('terminal');
+            const autoScroll = document.getElementById('autoScroll').checked;
+            
+            for (const msg of messages) {
+                const line = document.createElement('div');
+                line.className = 'terminal-line';
+                
+                const time = new Date(msg.timestamp);
+                const timeStr = time.toLocaleTimeString('en-US', { hour12: false });
+                
+                let msgClass = 'terminal-message';
+                if (msg.type === 'sent') msgClass += ' sent';
+                if (msg.type === 'error') msgClass += ' error';
+                
+                line.innerHTML = `
+                    <span class="terminal-timestamp">${timeStr}</span>
+                    <span class="terminal-port">${escapeHtml(msg.port)}</span>
+                    <span class="${msgClass}">${escapeHtml(msg.message)}</span>
+                `;
+                
+                terminal.appendChild(line);
+            }
+            
+            if (autoScroll) {
+                terminal.scrollTop = terminal.scrollHeight;
+            }
+        }
+
+        async function clearTerminal() {
+            await api('/serial/messages/clear', 'POST');
+            document.getElementById('terminal').innerHTML = '';
+            lastTimestamp = null;
+        }
+
+        async function updateConnectedCount() {
+            const connected = await api('/serial/connected');
+            document.getElementById('connectedCount').textContent = `${connected.length} connected`;
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // LLM Functions
+        async function loadLlmModels() {
+            try {
+                const models = await api('/llm/models');
+                const select = document.getElementById('llmModel');
+                if (Array.isArray(models) && models.length > 0) {
+                    select.innerHTML = models.map(m => `<option value="${m}">${m}</option>`).join('');
+                } else {
+                    select.innerHTML = '<option>No models found</option>';
+                }
+            } catch (e) {
+                document.getElementById('llmModel').innerHTML = '<option>Error loading models</option>';
+            }
+        }
+
+        async function analyzeLogs() {
+            const terminal = document.getElementById('terminal');
+            const lines = terminal.querySelectorAll('.terminal-line');
+            const logs = Array.from(lines).map(l => l.textContent).join('\n');
+            await sendToLlm(logs);
+        }
+
+        async function analyzeSelectedLogs() {
+            const terminal = document.getElementById('terminal');
+            const lines = terminal.querySelectorAll('.terminal-line');
+            const lastLines = Array.from(lines).slice(-50).map(l => l.textContent).join('\n');
+            await sendToLlm(lastLines);
+        }
+
+        async function sendToLlm(logs) {
+            const responseEl = document.getElementById('llmResponse');
+            const prompt = document.getElementById('llmPrompt').value;
+            const model = document.getElementById('llmModel').value;
+            
+            responseEl.textContent = 'Analyzing logs...';
+            responseEl.classList.add('loading');
+            
+            try {
+                const result = await api('/llm/analyze', 'POST', { logs, prompt, model });
+                responseEl.classList.remove('loading');
+                if (result.error) {
+                    responseEl.textContent = 'Error: ' + result.error;
+                } else {
+                    responseEl.textContent = result.response;
+                }
+            } catch (e) {
+                responseEl.classList.remove('loading');
+                responseEl.textContent = 'Error: ' + e.message;
+            }
+        }
+
+        // Load models on page load
+        loadLlmModels();
+    </script>
+</body>
+</html>
+

@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sessions - Boondock Monitor</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="/static/css/style.css" rel="stylesheet">
+    <style>
+        .sessions-table {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .table {
+            margin-bottom: 0;
+            color: var(--text-primary);
+        }
+        .table thead {
+            background: var(--bg-darker);
+            border-bottom: 2px solid var(--border-color);
+        }
+        .table thead th {
+            border-bottom: none;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.5px;
+            padding: 1rem 0.75rem;
+            color: var(--text-secondary);
+        }
+        .table tbody tr {
+            border-bottom: 1px solid var(--border-color);
+            transition: background 0.2s;
+        }
+        .table tbody tr:hover {
+            background: var(--hover-bg);
+        }
+        .table tbody tr.table-success {
+            background: rgba(25, 135, 84, 0.1);
+        }
+        .table tbody tr.table-success:hover {
+            background: rgba(25, 135, 84, 0.2);
+        }
+        .table tbody td {
+            padding: 0.75rem;
+            vertical-align: middle;
+        }
+        .table tbody td:first-child {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+        }
+        .firmware-badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            background: var(--accent-primary);
+            color: #000;
+            font-size: 0.75rem;
+            font-weight: 600;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .device-mac {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+        .device-name {
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+        .duration-badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            background: var(--hover-bg);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+        }
+        .stat-number {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 600;
+            color: var(--accent-primary);
+        }
+        .timestamp {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+        }
+        .loading-spinner {
+            text-align: center;
+            padding: 3rem;
+            color: var(--text-secondary);
+        }
+        .no-sessions {
+            text-align: center;
+            padding: 3rem;
+            color: var(--text-secondary);
+        }
+        .filter-controls {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <!-- Tab Navigation -->
+    <nav class="tab-nav">
+        <div class="container-fluid d-flex justify-content-between align-items-center">
+            <!-- Mobile hamburger -->
+            <button class="btn btn-outline-light d-md-none hamburger-btn" type="button" data-bs-toggle="offcanvas" data-bs-target="#mobileMenu">
+                <i class="bi bi-list fs-4"></i>
+            </button>
+            
+            <!-- Desktop nav -->
+            <ul class="nav d-none d-md-flex">
+                <li class="nav-item">
+                    <a class="nav-link" href="/">
+                        <i class="bi bi-soundwave me-2"></i>Boondock Monitor
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/terminal">
+                        <i class="bi bi-terminal me-2"></i>Terminal
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/devices">
+                        <i class="bi bi-cpu me-2"></i>Devices
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/player">
+                        <i class="bi bi-play-circle me-2"></i>Player
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/history">
+                        <i class="bi bi-clock-history me-2"></i>History
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link active" href="/sessions">
+                        <i class="bi bi-calendar-event me-2"></i>Sessions
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/firmware">
+                        <i class="bi bi-memory me-2"></i>Firmware
+                    </a>
+                </li>
+            </ul>
+            
+            <!-- Mobile title -->
+            <span class="d-md-none text-light fw-bold">Sessions</span>
+            <span class="d-md-none"></span>
+        </div>
+    </nav>
+    
+    <!-- Mobile Navigation Offcanvas -->
+    <div class="offcanvas offcanvas-start bg-dark" tabindex="-1" id="mobileMenu">
+        <div class="offcanvas-header border-bottom border-secondary">
+            <h5 class="offcanvas-title text-light">Navigation</h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas"></button>
+        </div>
+        <div class="offcanvas-body">
+            <nav class="nav flex-column">
+                <a class="nav-link text-light py-3 border-bottom border-secondary" href="/">
+                    <i class="bi bi-soundwave me-3"></i>Boondock Monitor
+                </a>
+                <a class="nav-link text-light py-3 border-bottom border-secondary" href="/terminal">
+                    <i class="bi bi-terminal me-3"></i>Terminal
+                </a>
+                <a class="nav-link text-light py-3 border-bottom border-secondary" href="/devices">
+                    <i class="bi bi-cpu me-3"></i>Devices
+                </a>
+                <a class="nav-link text-light py-3 border-bottom border-secondary" href="/player">
+                    <i class="bi bi-play-circle me-3"></i>Player
+                </a>
+                <a class="nav-link text-light py-3 border-bottom border-secondary" href="/history">
+                    <i class="bi bi-clock-history me-3"></i>History
+                </a>
+                <a class="nav-link text-light py-3 border-bottom border-secondary active" href="/sessions">
+                    <i class="bi bi-calendar-event me-3"></i>Sessions
+                </a>
+                <a class="nav-link text-light py-3 border-bottom border-secondary" href="/firmware">
+                    <i class="bi bi-memory me-3"></i>Firmware
+                </a>
+            </nav>
+        </div>
+    </div>
+
+    <div class="container-fluid py-3">
+        <div class="filter-controls">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label small text-muted">Filter by Firmware</label>
+                    <select class="form-select form-select-sm" id="firmwareFilter" style="background: var(--bg-dark); color: var(--text-primary); border-color: var(--border-color);">
+                        <option value="">All Firmwares</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small text-muted">Filter by Device</label>
+                    <select class="form-select form-select-sm" id="deviceFilter" style="background: var(--bg-dark); color: var(--text-primary); border-color: var(--border-color);">
+                        <option value="">All Devices</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small text-muted">Search</label>
+                    <input type="text" class="form-control form-control-sm" id="searchInput" placeholder="Search..." 
+                           style="background: var(--bg-dark); color: var(--text-primary); border-color: var(--border-color);">
+                </div>
+                <div class="col-md-3">
+                    <button class="btn btn-primary btn-sm w-100" onclick="loadSessions()">
+                        <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="sessions-table">
+            <div id="loadingSpinner" class="loading-spinner">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-2">Loading sessions...</p>
+            </div>
+            <div id="sessionsTable" style="display: none;">
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th style="width: 40px;"></th>
+                                <th>Firmware</th>
+                                <th>Device MAC</th>
+                                <th>Device Name</th>
+                                <th>Session Start</th>
+                                <th>Session End</th>
+                                <th>Session Duration</th>
+                                <th>Recordings</th>
+                                <th>Uploads</th>
+                                <th>Audio Duration</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sessionsTableBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div id="noSessions" class="no-sessions" style="display: none;">
+                <i class="bi bi-inbox fs-1 text-muted"></i>
+                <p class="mt-2">No sessions found</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Theme Toggle Button -->
+    <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Switch Theme">
+        <i class="bi bi-moon-fill"></i>
+    </button>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/theme.js"></script>
+    <script>
+        let allSessions = [];
+        let filteredSessions = [];
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadSessions();
+        });
+
+        async function api(endpoint) {
+            const response = await fetch(`/api${endpoint}`);
+            return response.json();
+        }
+
+        function formatDuration(seconds) {
+            if (!seconds && seconds !== 0) return 'N/A';
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = seconds % 60;
+            return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+        }
+
+        function formatDurationFromMs(milliseconds) {
+            if (!milliseconds && milliseconds !== 0) return 'N/A';
+            const seconds = Math.floor(milliseconds / 1000);
+            return formatDuration(seconds);
+        }
+
+        function formatTimestamp(timestamp) {
+            if (!timestamp) return 'N/A';
+            try {
+                const date = new Date(timestamp);
+                return date.toLocaleString();
+            } catch (e) {
+                return timestamp;
+            }
+        }
+
+        function calculateSessionDuration(start, end) {
+            if (!start) return 0;
+            // For active sessions, use current time if end is not set
+            const endTime = end || new Date().toISOString();
+            try {
+                const startDate = new Date(start);
+                const endDate = new Date(endTime);
+                return Math.floor((endDate - startDate) / 1000); // duration in seconds
+            } catch (e) {
+                return 0;
+            }
+        }
+
+        async function loadSessions() {
+            document.getElementById('loadingSpinner').style.display = 'block';
+            document.getElementById('sessionsTable').style.display = 'none';
+            document.getElementById('noSessions').style.display = 'none';
+
+            try {
+                const data = await api('/serial/sessions/all');
+                allSessions = data.sessions || [];
+                
+                // Populate filter dropdowns
+                const firmwares = [...new Set(allSessions.map(s => s.firmware).filter(f => f))].sort();
+                const firmwareSelect = document.getElementById('firmwareFilter');
+                firmwareSelect.innerHTML = '<option value="">All Firmwares</option>' + 
+                    firmwares.map(f => `<option value="${escapeHtml(f)}">${escapeHtml(f)}</option>`).join('');
+
+                const devices = [...new Set(allSessions.map(s => s.device_name).filter(d => d))].sort();
+                const deviceSelect = document.getElementById('deviceFilter');
+                deviceSelect.innerHTML = '<option value="">All Devices</option>' + 
+                    devices.map(d => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join('');
+
+                applyFilters();
+            } catch (error) {
+                console.error('Error loading sessions:', error);
+                document.getElementById('loadingSpinner').innerHTML = 
+                    '<p class="text-danger">Error loading sessions. Please try again.</p>';
+            }
+        }
+
+        function applyFilters() {
+            const firmwareFilter = document.getElementById('firmwareFilter').value;
+            const deviceFilter = document.getElementById('deviceFilter').value;
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase().trim();
+
+            filteredSessions = allSessions.filter(session => {
+                const matchesFirmware = !firmwareFilter || session.firmware === firmwareFilter;
+                const matchesDevice = !deviceFilter || session.device_name === deviceFilter;
+                const matchesSearch = !searchTerm || 
+                    session.device_mac.toLowerCase().includes(searchTerm) ||
+                    session.device_name.toLowerCase().includes(searchTerm) ||
+                    (session.firmware && session.firmware.toLowerCase().includes(searchTerm));
+                
+                return matchesFirmware && matchesDevice && matchesSearch;
+            });
+
+            renderSessions();
+        }
+
+        function renderSessions() {
+            const tbody = document.getElementById('sessionsTableBody');
+            
+            if (filteredSessions.length === 0) {
+                document.getElementById('loadingSpinner').style.display = 'none';
+                document.getElementById('sessionsTable').style.display = 'none';
+                document.getElementById('noSessions').style.display = 'block';
+                return;
+            }
+
+            tbody.innerHTML = filteredSessions.map(session => {
+                const sessionDuration = calculateSessionDuration(session.start, session.end);
+                const audioDuration = session.recordings_duration || 0;
+                const isActive = session.is_active || false;
+                const endDisplay = session.end ? formatTimestamp(session.end) : '';
+
+                return `
+                    <tr ${isActive ? 'class="table-success"' : ''}>
+                        <td style="text-align: center;">
+                            ${isActive ? '<span style="font-size: 1.2em;">🟢</span>' : ''}
+                        </td>
+                        <td>
+                            <span class="firmware-badge">${escapeHtml(session.firmware || 'Unknown')}</span>
+                        </td>
+                        <td>
+                            <span class="device-mac">${escapeHtml(session.device_mac)}</span>
+                        </td>
+                        <td>
+                            <span class="device-name">${escapeHtml(session.device_name)}</span>
+                        </td>
+                        <td>
+                            <span class="timestamp">${formatTimestamp(session.start)}</span>
+                        </td>
+                        <td>
+                            ${endDisplay}
+                        </td>
+                        <td>
+                            <span class="duration-badge">${formatDuration(sessionDuration)}</span>
+                        </td>
+                        <td>
+                            <span class="stat-number">${session.recordings || 0}</span>
+                        </td>
+                        <td>
+                            <span class="stat-number">${session.uploads || 0}</span>
+                        </td>
+                        <td>
+                            <span class="duration-badge">${formatDurationFromMs(audioDuration)}</span>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+
+            document.getElementById('loadingSpinner').style.display = 'none';
+            document.getElementById('sessionsTable').style.display = 'block';
+            document.getElementById('noSessions').style.display = 'none';
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Add event listeners for filters
+        document.getElementById('firmwareFilter').addEventListener('change', applyFilters);
+        document.getElementById('deviceFilter').addEventListener('change', applyFilters);
+        document.getElementById('searchInput').addEventListener('input', applyFilters);
+    </script>
+</body>
+</html>
+

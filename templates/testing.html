@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Testing - Boondock Monitor</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="/static/css/style.css" rel="stylesheet">
+    <style>
+        .test-category {
+            background: rgba(30, 35, 45, 0.5);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 0;
+            margin-bottom: 1rem;
+            overflow: hidden;
+        }
+        .test-category-header {
+            padding: 1rem;
+            background: rgba(0, 0, 0, 0.2);
+            border-bottom: 1px solid var(--border-color);
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background 0.2s;
+        }
+        .test-category-header:hover {
+            background: rgba(0, 0, 0, 0.4);
+        }
+        .test-category-header.expanded {
+            border-bottom: 1px solid var(--accent-primary);
+        }
+        .test-category-body {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+        .test-category-body.show {
+            max-height: 2000px;
+        }
+        .test-category-content {
+            padding: 1rem;
+        }
+        .test-case-item {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            padding: 0.75rem;
+            margin-bottom: 0.5rem;
+            transition: all 0.2s;
+        }
+        .test-case-item:hover {
+            background: rgba(0, 0, 0, 0.5);
+            border-color: var(--accent-primary);
+        }
+        .test-case-item.selected {
+            background: rgba(0, 123, 255, 0.2);
+            border-color: var(--accent-primary);
+        }
+        .group-controls {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+        .group-checkbox {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+        .category-title {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            flex: 1;
+        }
+        .category-icon {
+            transition: transform 0.3s ease;
+        }
+        .category-icon.expanded {
+            transform: rotate(90deg);
+        }
+        .test-results {
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        .test-result-item {
+            padding: 0.75rem;
+            margin-bottom: 0.5rem;
+            border-left: 3px solid var(--border-color);
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 4px;
+        }
+        .test-result-item.success {
+            border-left-color: var(--accent-success);
+        }
+        .test-result-item.error {
+            border-left-color: var(--accent-danger);
+        }
+        .test-result-item.warning {
+            border-left-color: var(--accent-warning);
+        }
+        .test-result-item.running {
+            border-left-color: var(--accent-info);
+        }
+        .progress-container {
+            margin: 1rem 0;
+        }
+        .device-selector {
+            margin-bottom: 1.5rem;
+        }
+    </style>
+</head>
+<body>
+    <!-- Tab Navigation -->
+    <nav class="tab-nav">
+        <div class="container-fluid d-flex justify-content-between align-items-center">
+            <button class="btn btn-outline-light d-md-none hamburger-btn" type="button" data-bs-toggle="offcanvas" data-bs-target="#mobileMenu">
+                <i class="bi bi-list fs-4"></i>
+            </button>
+            
+            <ul class="nav d-none d-md-flex">
+                <li class="nav-item">
+                    <a class="nav-link" href="/">
+                        <i class="bi bi-soundwave me-2"></i>Boondock Monitor
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/terminal">
+                        <i class="bi bi-terminal me-2"></i>Terminal
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/devices">
+                        <i class="bi bi-cpu me-2"></i>Devices
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link active" href="/testing">
+                        <i class="bi bi-check-circle me-2"></i>Testing
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/history">
+                        <i class="bi bi-clock-history me-2"></i>History
+                    </a>
+                </li>
+            </ul>
+            
+            <span class="d-md-none text-light fw-bold">Testing</span>
+        </div>
+    </nav>
+
+    <!-- Mobile Navigation Offcanvas -->
+    <div class="offcanvas offcanvas-start bg-dark" tabindex="-1" id="mobileMenu">
+        <div class="offcanvas-header border-bottom border-secondary">
+            <h5 class="offcanvas-title text-light">Navigation</h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas"></button>
+        </div>
+        <div class="offcanvas-body">
+            <nav class="nav flex-column">
+                <a class="nav-link text-light py-3 border-bottom border-secondary" href="/">
+                    <i class="bi bi-soundwave me-3"></i>Boondock Monitor
+                </a>
+                <a class="nav-link text-light py-3 border-bottom border-secondary" href="/terminal">
+                    <i class="bi bi-terminal me-3"></i>Terminal
+                </a>
+                <a class="nav-link text-light py-3 border-bottom border-secondary" href="/devices">
+                    <i class="bi bi-cpu me-3"></i>Devices
+                </a>
+                <a class="nav-link text-light py-3 border-bottom border-secondary active" href="/testing">
+                    <i class="bi bi-check-circle me-3"></i>Testing
+                </a>
+                <a class="nav-link text-light py-3 border-bottom border-secondary" href="/history">
+                    <i class="bi bi-clock-history me-3"></i>History
+                </a>
+            </nav>
+        </div>
+    </div>
+
+    <div class="container-fluid py-4">
+        <div class="row">
+            <div class="col-12">
+                <h2 class="text-light mb-4"><i class="bi bi-check-circle me-2"></i>Device Testing</h2>
+                
+                <!-- Device Selector -->
+                <div class="device-selector">
+                    <label class="form-label text-light">Select Device</label>
+                    <select class="form-select bg-dark text-light border-secondary" id="deviceSelect">
+                        <option value="">-- Select a device --</option>
+                    </select>
+                </div>
+
+                <!-- Test Cases Selection -->
+                <div class="card bg-dark border-secondary mb-4">
+                    <div class="card-header border-secondary">
+                        <h5 class="mb-0"><i class="bi bi-list-check me-2"></i>Select Test Cases</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="testCasesContainer">
+                            <div class="text-center text-muted py-4">
+                                <i class="bi bi-hourglass-split display-4 d-block mb-2"></i>
+                                Loading test cases...
+                            </div>
+                        </div>
+                        <div class="mt-3 d-flex gap-2">
+                            <button class="btn btn-sm btn-outline-primary" onclick="selectAllTests()">
+                                <i class="bi bi-check-all me-1"></i>Select All
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="deselectAllTests()">
+                                <i class="bi bi-x-square me-1"></i>Deselect All
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Test Controls -->
+                <div class="card bg-dark border-secondary mb-4">
+                    <div class="card-body">
+                        <div class="d-flex gap-2 align-items-center">
+                            <button class="btn btn-success" id="runTestsBtn" onclick="runTests()" disabled>
+                                <i class="bi bi-play-fill me-2"></i>Run Selected Tests
+                            </button>
+                            <button class="btn btn-danger" id="cancelTestsBtn" onclick="cancelTests()" disabled style="display: none;">
+                                <i class="bi bi-stop-fill me-2"></i>Cancel Tests
+                            </button>
+                            <span class="text-muted ms-auto" id="selectedCount">0 tests selected</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Test Progress -->
+                <div class="card bg-dark border-secondary mb-4" id="testProgressCard" style="display: none;">
+                    <div class="card-header border-secondary">
+                        <h5 class="mb-0"><i class="bi bi-activity me-2"></i>Test Progress</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="progress-container">
+                            <div class="progress bg-secondary" style="height: 25px;">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                     id="testProgressBar" 
+                                     role="progressbar" 
+                                     style="width: 0%">
+                                    <span id="testProgressText">0%</span>
+                                </div>
+                            </div>
+                            <div class="mt-2 text-muted small" id="testStatusText">Initializing...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Test Results -->
+                <div class="card bg-dark border-secondary">
+                    <div class="card-header border-secondary d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0"><i class="bi bi-clipboard-data me-2"></i>Test Results</h5>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="clearResults()">
+                            <i class="bi bi-trash me-1"></i>Clear
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div class="test-results" id="testResults">
+                            <div class="text-center text-muted py-4">
+                                <i class="bi bi-clipboard display-4 d-block mb-2"></i>
+                                No test results yet. Select tests and click "Run Selected Tests" to begin.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let testCases = {};
+        let selectedTests = new Set();
+        let currentJobId = null;
+        let statusPollInterval = null;
+
+        // Track dropdown interactions
+        let deviceSelectInteractionActive = false;
+        
+        // Load devices and test cases on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadDevices();
+            loadTestCases();
+            
+            // Track interactions with device select dropdown
+            const deviceSelect = document.getElementById('deviceSelect');
+            if (deviceSelect) {
+                deviceSelect.addEventListener('mousedown', () => {
+                    deviceSelectInteractionActive = true;
+                });
+                deviceSelect.addEventListener('mouseup', () => {
+                    setTimeout(() => {
+                        deviceSelectInteractionActive = false;
+                    }, 100);
+                });
+                deviceSelect.addEventListener('focus', () => {
+                    deviceSelectInteractionActive = true;
+                });
+                deviceSelect.addEventListener('blur', () => {
+                    setTimeout(() => {
+                        deviceSelectInteractionActive = false;
+                    }, 100);
+                });
+            }
+        });
+
+        async function loadDevices() {
+            try {
+                const response = await fetch('/api/serial/device-data');
+                const data = await response.json();
+                
+                const select = document.getElementById('deviceSelect');
+                if (!select) return;
+                
+                // Preserve selected value and check if dropdown is focused or being interacted with
+                const currentValue = select.value;
+                const isFocused = document.activeElement === select;
+                const shouldSkipUpdate = isFocused || deviceSelectInteractionActive;
+                
+                // Only update if dropdown is not focused or being interacted with
+                if (!shouldSkipUpdate) {
+                    select.innerHTML = '<option value="">-- Select a device --</option>';
+                    
+                    for (const [key, device] of Object.entries(data)) {
+                        const mac = device.mac || key;
+                        const deviceName = device.name || mac;
+                        const port = device.port || '';
+                        const displayName = deviceName + (port && port !== mac ? ` • ${port}` : '') + ` • ${mac}`;
+                        const option = document.createElement('option');
+                        option.value = mac;
+                        option.textContent = displayName;
+                        select.appendChild(option);
+                    }
+                    
+                    // Restore selected value if it still exists
+                    if (currentValue) {
+                        const optionExists = Array.from(select.options).some(opt => opt.value === currentValue);
+                        if (optionExists) {
+                            select.value = currentValue;
+                        }
+                    }
+                }
+                
+                // Only add event listener once
+                if (!select.dataset.listenerAdded) {
+                    select.addEventListener('change', function() {
+                        const mac = this.value;
+                        document.getElementById('runTestsBtn').disabled = !mac || selectedTests.size === 0;
+                    });
+                    select.dataset.listenerAdded = 'true';
+                }
+            } catch (error) {
+                console.error('Error loading devices:', error);
+            }
+        }
+
+        async function loadTestCases() {
+            try {
+                const response = await fetch('/api/testing/test-cases');
+                testCases = await response.json();
+                renderTestCases();
+                // Initialize categories as expanded after rendering
+                setTimeout(initializeCategories, 100);
+            } catch (error) {
+                console.error('Error loading test cases:', error);
+                document.getElementById('testCasesContainer').innerHTML = 
+                    '<div class="text-danger">Error loading test cases. Please refresh the page.</div>';
+            }
+        }
+
+        // Initialize all categories as expanded by default
+        function initializeCategories() {
+            const categoryOrder = ['settings', 'recording', 'functions', 'advanced'];
+            categoryOrder.forEach(category => {
+                const body = document.getElementById(`body_${category}`);
+                const icon = document.getElementById(`icon_${category}`);
+                const header = body?.closest('.test-category')?.querySelector('.test-category-header');
+                
+                if (body && icon && header) {
+                    body.classList.add('show');
+                    icon.classList.add('expanded');
+                    header.classList.add('expanded');
+                }
+            });
+            updateGroupCheckboxes();
+        }
+
+        function renderTestCases() {
+            const container = document.getElementById('testCasesContainer');
+            container.innerHTML = '';
+
+            const categoryOrder = ['settings', 'recording', 'functions', 'advanced'];
+            const categoryNames = {
+                'settings': 'Settings Tests',
+                'recording': 'Recording Tests',
+                'functions': 'Function Tests',
+                'advanced': 'Advanced Tests'
+            };
+            const categoryIcons = {
+                'settings': 'bi-gear',
+                'recording': 'bi-mic',
+                'functions': 'bi-terminal',
+                'advanced': 'bi-cpu'
+            };
+
+            for (const category of categoryOrder) {
+                if (!testCases[category] || testCases[category].length === 0) continue;
+
+                const categoryDiv = document.createElement('div');
+                categoryDiv.className = 'test-category';
+                categoryDiv.dataset.category = category;
+                
+                // Category header with expand/collapse
+                const categoryHeader = document.createElement('div');
+                categoryHeader.className = 'test-category-header';
+                categoryHeader.onclick = () => toggleCategory(category);
+                
+                const categoryTitle = document.createElement('div');
+                categoryTitle.className = 'category-title';
+                categoryTitle.innerHTML = `
+                    <i class="bi bi-chevron-right category-icon" id="icon_${category}"></i>
+                    <i class="bi ${categoryIcons[category]} me-2 text-info"></i>
+                    <strong class="text-light">${categoryNames[category]}</strong>
+                    <span class="text-muted ms-2">(${testCases[category].length} tests)</span>
+                `;
+                
+                const groupControls = document.createElement('div');
+                groupControls.className = 'group-controls';
+                groupControls.onclick = (e) => e.stopPropagation(); // Prevent header toggle
+                
+                const groupCheckbox = document.createElement('input');
+                groupCheckbox.type = 'checkbox';
+                groupCheckbox.className = 'form-check-input group-checkbox';
+                groupCheckbox.id = `group_${category}`;
+                groupCheckbox.onchange = (e) => toggleGroup(category, e.target.checked);
+                
+                groupControls.appendChild(groupCheckbox);
+                groupControls.appendChild(document.createTextNode(' '));
+                
+                const selectAllBtn = document.createElement('button');
+                selectAllBtn.className = 'btn btn-sm btn-outline-primary py-0 px-2';
+                selectAllBtn.innerHTML = 'All';
+                selectAllBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    selectGroup(category, true);
+                };
+                
+                const selectNoneBtn = document.createElement('button');
+                selectNoneBtn.className = 'btn btn-sm btn-outline-secondary py-0 px-2';
+                selectNoneBtn.innerHTML = 'None';
+                selectNoneBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    selectGroup(category, false);
+                };
+                
+                groupControls.appendChild(selectAllBtn);
+                groupControls.appendChild(selectNoneBtn);
+                
+                categoryHeader.appendChild(categoryTitle);
+                categoryHeader.appendChild(groupControls);
+                categoryDiv.appendChild(categoryHeader);
+
+                // Category body with test cases
+                const categoryBody = document.createElement('div');
+                categoryBody.className = 'test-category-body show';
+                categoryBody.id = `body_${category}`;
+                
+                const categoryContent = document.createElement('div');
+                categoryContent.className = 'test-category-content';
+
+                for (const testCase of testCases[category]) {
+                    const testDiv = document.createElement('div');
+                    testDiv.className = 'test-case-item';
+                    testDiv.dataset.testId = testCase.id;
+                    testDiv.dataset.category = category;
+                    
+                    testDiv.innerHTML = `
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" 
+                                   id="test_${testCase.id}" 
+                                   value="${testCase.id}"
+                                   onchange="toggleTest('${testCase.id}', this.checked)">
+                            <label class="form-check-label text-light" for="test_${testCase.id}">
+                                <strong>${escapeHtml(testCase.name)}</strong>
+                                <br>
+                                <small class="text-muted">${escapeHtml(testCase.description)}</small>
+                            </label>
+                        </div>
+                    `;
+                    
+                    categoryContent.appendChild(testDiv);
+                }
+                
+                categoryBody.appendChild(categoryContent);
+                categoryDiv.appendChild(categoryBody);
+                
+                container.appendChild(categoryDiv);
+            }
+        }
+
+        function toggleCategory(category) {
+            const body = document.getElementById(`body_${category}`);
+            const icon = document.getElementById(`icon_${category}`);
+            const header = body.closest('.test-category').querySelector('.test-category-header');
+            
+            if (body.classList.contains('show')) {
+                body.classList.remove('show');
+                icon.classList.remove('expanded');
+                header.classList.remove('expanded');
+            } else {
+                body.classList.add('show');
+                icon.classList.add('expanded');
+                header.classList.add('expanded');
+            }
+        }
+
+        function toggleGroup(category, checked) {
+            const categoryDiv = document.querySelector(`[data-category="${category}"]`);
+            const checkboxes = categoryDiv.querySelectorAll(`[data-category="${category}"] input[type="checkbox"]:not(.group-checkbox)`);
+            
+            checkboxes.forEach(cb => {
+                cb.checked = checked;
+                toggleTest(cb.value, checked);
+            });
+        }
+
+        function selectGroup(category, select) {
+            const categoryDiv = document.querySelector(`[data-category="${category}"]`);
+            const groupCheckbox = document.getElementById(`group_${category}`);
+            const checkboxes = categoryDiv.querySelectorAll(`[data-category="${category}"] input[type="checkbox"]:not(.group-checkbox)`);
+            
+            checkboxes.forEach(cb => {
+                cb.checked = select;
+                toggleTest(cb.value, select);
+            });
+            
+            groupCheckbox.checked = select;
+        }
+
+        function toggleTest(testId, checked) {
+            if (checked) {
+                selectedTests.add(testId);
+            } else {
+                selectedTests.delete(testId);
+            }
+            updateSelectedCount();
+            updateRunButton();
+            updateGroupCheckboxes();
+        }
+
+        function updateGroupCheckboxes() {
+            const categoryOrder = ['settings', 'recording', 'functions', 'advanced'];
+            
+            categoryOrder.forEach(category => {
+                const categoryDiv = document.querySelector(`[data-category="${category}"]`);
+                if (!categoryDiv) return;
+                
+                const checkboxes = categoryDiv.querySelectorAll(`[data-category="${category}"] input[type="checkbox"]:not(.group-checkbox)`);
+                const groupCheckbox = document.getElementById(`group_${category}`);
+                
+                if (checkboxes.length === 0) return;
+                
+                const checkedCount = Array.from(checkboxes).filter(cb => cb.checked).length;
+                
+                if (checkedCount === 0) {
+                    groupCheckbox.checked = false;
+                    groupCheckbox.indeterminate = false;
+                } else if (checkedCount === checkboxes.length) {
+                    groupCheckbox.checked = true;
+                    groupCheckbox.indeterminate = false;
+                } else {
+                    groupCheckbox.checked = false;
+                    groupCheckbox.indeterminate = true;
+                }
+            });
+        }
+
+        function updateSelectedCount() {
+            const count = selectedTests.size;
+            document.getElementById('selectedCount').textContent = `${count} test${count !== 1 ? 's' : ''} selected`;
+        }
+
+        function updateRunButton() {
+            const mac = document.getElementById('deviceSelect').value;
+            document.getElementById('runTestsBtn').disabled = !mac || selectedTests.size === 0;
+        }
+
+        // Update group checkboxes when individual tests are toggled
+        document.addEventListener('DOMContentLoaded', function() {
+            // This will be called after renderTestCases completes
+        });
+
+        function selectAllTests() {
+            document.querySelectorAll('#testCasesContainer input[type="checkbox"]').forEach(cb => {
+                if (!cb.classList.contains('group-checkbox')) {
+                    cb.checked = true;
+                    selectedTests.add(cb.value);
+                }
+            });
+            // Update group checkboxes
+            document.querySelectorAll('.group-checkbox').forEach(cb => {
+                cb.checked = true;
+                cb.indeterminate = false;
+            });
+            updateSelectedCount();
+            updateRunButton();
+        }
+
+        function deselectAllTests() {
+            document.querySelectorAll('#testCasesContainer input[type="checkbox"]').forEach(cb => {
+                if (!cb.classList.contains('group-checkbox')) {
+                    cb.checked = false;
+                } else {
+                    cb.checked = false;
+                    cb.indeterminate = false;
+                }
+            });
+            selectedTests.clear();
+            updateSelectedCount();
+            updateRunButton();
+        }
+
+        async function runTests() {
+            const mac = document.getElementById('deviceSelect').value;
+            if (!mac) {
+                alert('Please select a device');
+                return;
+            }
+
+            if (selectedTests.size === 0) {
+                alert('Please select at least one test case');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/testing/run', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        mac: mac,
+                        test_case_ids: Array.from(selectedTests)
+                    })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Failed to start tests');
+                }
+
+                const data = await response.json();
+                currentJobId = data.job_id;
+
+                // Show progress card
+                document.getElementById('testProgressCard').style.display = 'block';
+                document.getElementById('runTestsBtn').disabled = true;
+                document.getElementById('cancelTestsBtn').style.display = 'inline-block';
+                document.getElementById('cancelTestsBtn').disabled = false;
+
+                // Clear previous results
+                document.getElementById('testResults').innerHTML = '';
+
+                // Start polling for status
+                startStatusPolling();
+            } catch (error) {
+                alert('Error starting tests: ' + error.message);
+                console.error('Error:', error);
+            }
+        }
+
+        function startStatusPolling() {
+            if (statusPollInterval) {
+                clearInterval(statusPollInterval);
+            }
+
+            statusPollInterval = setInterval(async () => {
+                if (!currentJobId) return;
+
+                try {
+                    const response = await fetch(`/api/testing/job/${currentJobId}`);
+                    if (!response.ok) {
+                        throw new Error('Failed to get job status');
+                    }
+
+                    const job = await response.json();
+                    updateProgress(job);
+
+                    if (job.status === 'complete' || job.status === 'error' || job.status === 'cancelled') {
+                        clearInterval(statusPollInterval);
+                        statusPollInterval = null;
+                        document.getElementById('runTestsBtn').disabled = false;
+                        document.getElementById('cancelTestsBtn').style.display = 'none';
+                    }
+                } catch (error) {
+                    console.error('Error polling status:', error);
+                }
+            }, 1000); // Poll every second
+        }
+
+        function updateProgress(job) {
+            const progressBar = document.getElementById('testProgressBar');
+            const progressText = document.getElementById('testProgressText');
+            const statusText = document.getElementById('testStatusText');
+            const resultsContainer = document.getElementById('testResults');
+
+            const progress = job.progress || 0;
+            progressBar.style.width = `${progress}%`;
+            progressText.textContent = `${progress}%`;
+
+            let statusMessage = '';
+            if (job.status === 'reading_settings') {
+                statusMessage = 'Reading original settings...';
+            } else if (job.status === 'running') {
+                statusMessage = `Running tests... (${job.completed_tests}/${job.total_tests} completed)`;
+            } else if (job.status === 'restoring_settings') {
+                statusMessage = 'Restoring original settings...';
+            } else if (job.status === 'complete') {
+                statusMessage = 'Tests completed successfully!';
+                progressBar.classList.remove('progress-bar-animated');
+                progressBar.classList.add('bg-success');
+            } else if (job.status === 'error') {
+                statusMessage = `Error: ${job.error || 'Unknown error'}`;
+                progressBar.classList.remove('progress-bar-animated');
+                progressBar.classList.add('bg-danger');
+            } else if (job.status === 'cancelled') {
+                statusMessage = 'Tests cancelled';
+                progressBar.classList.remove('progress-bar-animated');
+                progressBar.classList.add('bg-warning');
+            }
+
+            statusText.textContent = statusMessage;
+
+            // Update results
+            if (job.results && job.results.length > 0) {
+                resultsContainer.innerHTML = '';
+                job.results.forEach((result, index) => {
+                    const resultDiv = document.createElement('div');
+                    resultDiv.className = `test-result-item ${result.status || 'running'}`;
+                    
+                    const statusIcon = {
+                        'success': 'bi-check-circle-fill text-success',
+                        'error': 'bi-x-circle-fill text-danger',
+                        'warning': 'bi-exclamation-triangle-fill text-warning',
+                        'running': 'bi-hourglass-split text-info'
+                    }[result.status || 'running'] || 'bi-circle text-muted';
+
+                    let detailsHtml = '';
+                    if (result.details && Object.keys(result.details).length > 0) {
+                        detailsHtml = '<div class="mt-2"><small class="text-muted">';
+                        for (const [key, value] of Object.entries(result.details)) {
+                            detailsHtml += `<strong>${escapeHtml(key)}</strong>: ${escapeHtml(String(value))}<br>`;
+                        }
+                        detailsHtml += '</small></div>';
+                    }
+
+                    resultDiv.innerHTML = `
+                        <div class="d-flex align-items-start">
+                            <i class="bi ${statusIcon} me-2 mt-1"></i>
+                            <div class="flex-grow-1">
+                                <strong>${escapeHtml(result.step || result.test_name || 'Test')}</strong>
+                                <div class="text-muted small">${escapeHtml(result.message || '')}</div>
+                                ${detailsHtml}
+                            </div>
+                        </div>
+                    `;
+                    
+                    resultsContainer.appendChild(resultDiv);
+                });
+
+                // Scroll to bottom
+                resultsContainer.scrollTop = resultsContainer.scrollHeight;
+            }
+        }
+
+        async function cancelTests() {
+            if (!currentJobId) return;
+
+            if (!confirm('Are you sure you want to cancel the running tests?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/testing/job/${currentJobId}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    if (statusPollInterval) {
+                        clearInterval(statusPollInterval);
+                        statusPollInterval = null;
+                    }
+                    document.getElementById('cancelTestsBtn').disabled = true;
+                }
+            } catch (error) {
+                console.error('Error cancelling tests:', error);
+            }
+        }
+
+        function clearResults() {
+            document.getElementById('testResults').innerHTML = `
+                <div class="text-center text-muted py-4">
+                    <i class="bi bi-clipboard display-4 d-block mb-2"></i>
+                    No test results yet. Select tests and click "Run Selected Tests" to begin.
+                </div>
+            `;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Refresh devices periodically
+        setInterval(loadDevices, 10000);
+    </script>
+</body>
+</html>
+
