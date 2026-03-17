@@ -5,6 +5,7 @@ import threading
 import time
 import json
 import os
+import shutil
 from datetime import datetime, date
 from collections import deque
 from log_summary_service import log_summary_service
@@ -336,54 +337,55 @@ class SerialService:
         return {'success': all_success, 'results': results, 'port': port}
     
     def get_device_data(self):
-        """Get parsed device data keyed by MAC address."""
+        """Get parsed device data keyed by MAC address. Only includes devices currently connected via serial."""
         with self.lock:
             result = {}
+            connected_ports = set(self.connections.keys())
             for port, data in self.device_data.items():
+                if port not in connected_ports:
+                    continue
                 mac = data.get('mac', '')
                 if mac:
                     result[mac] = {**data, 'port': port}
                     
-                    # Structure health data from flat device data
+                    # Structure health data from flat device data (matches serial message fields)
                     health = {
                         # Storage
                         'st': data.get('storage_mode', ''),
                         'sd': data.get('sd_available', False),
                         'su': data.get('storage_util', None),
-                        
-                        # Session statistics
-                        'ec': data.get('error_count', 0),
+                        'sz': data.get('storage_size'),
+                        'uz': data.get('storage_used'),
+                        # Session/recording (serial: rc, uc, pq, td, lr)
+                        'rc': data.get('recording_count', 0),
+                        'uc': data.get('uploaded_count', 0),
+                        'pq': data.get('pending_queue', 0),
                         'td': data.get('total_duration', 0),
                         'lr': data.get('last_recording', 0),
-                        
-                        # Upload statistics
+                        # Upload (serial: tu, ta, ur, lu)
                         'tu': data.get('total_uploads', 0),
                         'ta': data.get('total_attempts', 0),
                         'ur': data.get('upload_rate', None),
                         'lu': data.get('last_upload', 0),
-                        
-                        # Event statistics
+                        # Event (serial: ev, le)
                         'ev': data.get('event_count', 0),
                         'le': data.get('last_event', 0),
-                        
-                        # Health counts
+                        # Health counts (serial: wc, fc, ec)
                         'wc': data.get('warning_count', 0),
                         'fc': data.get('fatal_count', 0),
-                        
-                        # Memory
+                        'ec': data.get('error_count', 0),
+                        # Memory (serial: ht, hf, pt, pu)
                         'ht': data.get('heap_total', ''),
                         'hf': data.get('heap_free', ''),
                         'pt': data.get('psram_total', ''),
                         'pu': data.get('psram_used', ''),
-                        
-                        # System
+                        # System (serial: tm, wi, ip, ri, ut)
                         'tm': data.get('time_valid', False),
                         'wi': data.get('wifi', False),
                         'ip': data.get('ip', ''),
                         'ri': data.get('rssi', 0),
                         'ut': data.get('uptime', 0),
-                        
-                        # Yearly summary
+                        # Yearly summary (serial: yr, yf, ys, yh, ym, yd)
                         'yr': data.get('year'),
                         'yf': data.get('year_files'),
                         'ys': data.get('year_size'),
@@ -580,6 +582,20 @@ class SerialService:
         
         return devices
     
+    def clear_all_history(self):
+        """Remove all serial history (all device folders and files)."""
+        if not os.path.exists(HISTORY_FOLDER):
+            return {'success': True, 'message': 'No history to clear'}
+        with self.lock:
+            for name in os.listdir(HISTORY_FOLDER):
+                path = os.path.join(HISTORY_FOLDER, name)
+                if os.path.isdir(path):
+                    try:
+                        shutil.rmtree(path)
+                    except Exception as e:
+                        return {'success': False, 'error': str(e)}
+        return {'success': True, 'message': 'All history cleared'}
+
     def _parse_json_message(self, port, line):
         """Parse JSON messages and update device data."""
         try:
@@ -756,6 +772,21 @@ class SerialService:
                 # System status
                 dev['time_valid'] = data.get('tm', dev.get('time_valid', False))
                 dev['storage_util'] = data.get('su', dev.get('storage_util', None))
+                # Storage size (if firmware sends sz/uz as GB or tb/ub as bytes)
+                if 'sz' in data and data['sz'] is not None:
+                    try:
+                        dev['storage_size'] = float(data['sz']) if not isinstance(data['sz'], str) else float(data['sz'].replace(' GB', '').strip())
+                    except (TypeError, ValueError):
+                        pass
+                if 'uz' in data and data['uz'] is not None:
+                    try:
+                        dev['storage_used'] = float(data['uz']) if not isinstance(data['uz'], str) else float(data['uz'].replace(' GB', '').strip())
+                    except (TypeError, ValueError):
+                        pass
+                if 'tb' in data and data['tb'] is not None and isinstance(data['tb'], (int, float)):
+                    dev['storage_size'] = round(data['tb'] / (1024 ** 3), 2)
+                if 'ub' in data and data['ub'] is not None and isinstance(data['ub'], (int, float)):
+                    dev['storage_used'] = round(data['ub'] / (1024 ** 3), 2)
                 
                 # WiFi information
                 dev['wifi'] = data.get('wi', dev.get('wifi', False))

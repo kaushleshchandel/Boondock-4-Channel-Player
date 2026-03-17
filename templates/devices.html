@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Devices - Boondock Monitor</title>
+    <title>Devices - Boondock 4 Channel Player</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -252,7 +252,7 @@
             <ul class="nav d-none d-md-flex">
                 <li class="nav-item">
                     <a class="nav-link" href="/">
-                        <i class="bi bi-soundwave me-2"></i>Boondock Monitor
+                        <i class="bi bi-soundwave me-2"></i>Boondock 4 Channel Player
                     </a>
                 </li>
                 <li class="nav-item">
@@ -302,7 +302,7 @@
         <div class="offcanvas-body p-0">
             <nav class="nav flex-column">
                 <a class="nav-link text-light py-3 px-4 border-bottom border-secondary" href="/">
-                    <i class="bi bi-soundwave me-3"></i>Boondock Monitor
+                    <i class="bi bi-soundwave me-3"></i>Boondock 4 Channel Player
                 </a>
                 <a class="nav-link text-light py-3 px-4 border-bottom border-secondary" href="/terminal">
                     <i class="bi bi-terminal me-3"></i>Terminal
@@ -800,6 +800,31 @@
             return ((clamped - minDb) / (maxDb - minDb)) * 100;
         }
 
+        function getRecordingsCount(dev) {
+            const health = dev.health || {};
+            if (health.rc !== undefined && health.rc !== null) return health.rc;
+            if (dev.recording_count !== undefined && dev.recording_count !== null) return dev.recording_count;
+            if (dev.current_session && dev.current_session.recordings !== undefined) return dev.current_session.recordings;
+            return 0;
+        }
+
+        function getUploadsDisplay(dev) {
+            const uploaded = (dev.health && dev.health.uc !== undefined && dev.health.uc !== null) ? dev.health.uc
+                : (dev.uploaded_count !== undefined && dev.uploaded_count !== null) ? dev.uploaded_count
+                : (dev.current_session && dev.current_session.uploaded !== undefined) ? dev.current_session.uploaded
+                : 0;
+            const queue = getQueueCount(dev);
+            return queue !== undefined && queue !== null ? `${uploaded} (${queue})` : String(uploaded);
+        }
+
+        function getQueueCount(dev) {
+            const health = dev.health || {};
+            if (health.pq !== undefined && health.pq !== null) return health.pq;
+            if (dev.pending_queue !== undefined && dev.pending_queue !== null) return dev.pending_queue;
+            if (dev.queue !== undefined && dev.queue !== null) return dev.queue;
+            return 0;
+        }
+
         function renderDeviceGrid() {
             const container = document.getElementById('deviceGrid');
             const ports = Object.keys(deviceData);
@@ -893,19 +918,19 @@
                             <div class="row g-2 mb-3">
                                 <div class="col-6 col-md-3">
                                     <div class="stat-box">
-                                        <div class="stat-value">${(dev.current_session && dev.current_session.recordings !== undefined) ? dev.current_session.recordings : (dev.recording_count !== undefined ? dev.recording_count : 0)}</div>
+                                        <div class="stat-value">${getRecordingsCount(dev)}</div>
                                         <div class="stat-label">Recordings</div>
                                     </div>
                                 </div>
                                 <div class="col-6 col-md-3">
                                     <div class="stat-box">
-                                        <div class="stat-value">${(dev.current_session && dev.current_session.uploaded !== undefined) ? dev.current_session.uploaded : (dev.uploaded_count !== undefined ? dev.uploaded_count : 0)}</div>
+                                        <div class="stat-value">${getUploadsDisplay(dev)}</div>
                                         <div class="stat-label">Uploads</div>
                                     </div>
                                 </div>
                                 <div class="col-6 col-md-3">
                                     <div class="stat-box">
-                                        <div class="stat-value">${dev.pending_queue !== undefined ? dev.pending_queue : 0}</div>
+                                        <div class="stat-value">${getQueueCount(dev)}</div>
                                         <div class="stat-label">Queue</div>
                                     </div>
                                 </div>
@@ -1035,51 +1060,55 @@
             
             let html = '<div class="row">';
             
-            // Config section
+            // Config section (serial config message fields: fw, ho, po, ss, ath, mrm, xrm, prm, cg, is, rsc, oh, wtp, etc.)
             if (dev.config && Object.keys(dev.config).length > 0) {
                 html += `
                     <div class="col-md-6">
-                        <h6 class="text-info mb-2"><i class="bi bi-gear me-1"></i>Configuration</h6>
+                        <h6 class="text-info mb-2"><i class="bi bi-gear me-1"></i>Configuration (from serial)</h6>
                         <div class="bg-black p-2 rounded" style="font-size: 0.8rem;">
                 `;
                 const configLabels = {
-                    'ho': 'Host', 'po': 'Port', 'ss': 'SSID',
-                    'se': 'Sensitivity', 'mi': 'Min Recording', 'mx': 'Max Recording',
-                    'si': 'Silence', 'pr': 'Pre-record', 'gn': 'Gain', 'is': 'Sample Rate',
-                    'oh': 'UTC Offset', 'wtp': 'WiFi TX Power'
+                    'fw': 'Firmware', 'ho': 'Host', 'po': 'Port', 'ss': 'SSID',
+                    'ath': 'Audio threshold', 'mrm': 'Min recording (ms)', 'xrm': 'Max recording (ms)',
+                    'stm': 'Silence threshold (ms)', 'prm': 'Pre-record (ms)', 'cg': 'Codec gain (dB)', 'is': 'Input sample rate (Hz)', 'rsc': 'Record to SD',
+                    'sie': 'Static IP enabled', 'rte': 'RTC enabled', 'usc': 'Use SD card',
+                    'oh': 'Timezone offset (h)', 'wtp': 'WiFi TX power'
                 };
                 for (const [key, label] of Object.entries(configLabels)) {
                     if (dev.config[key] !== undefined) {
-                        html += `<div class="detail-row"><span class="detail-label">${label}</span><span class="detail-value">${escapeHtml(String(dev.config[key]))}</span></div>`;
+                        const val = dev.config[key];
+                        html += `<div class="detail-row"><span class="detail-label">${label}</span><span class="detail-value">${escapeHtml(typeof val === 'boolean' ? (val ? 'Yes' : 'No') : String(val))}</span></div>`;
                     }
                 }
                 html += '</div></div>';
             }
             
-            // Health section
+            // Health section (serial message fields: rc, uc, pq, td, st, sd, ht, hf, pt, pu, tm, wi, ip, ri, ut, etc.)
             if (dev.health && Object.keys(dev.health).length > 0) {
                 html += `
                     <div class="col-md-6">
-                        <h6 class="text-success mb-2"><i class="bi bi-heart-pulse me-1"></i>Health</h6>
+                        <h6 class="text-success mb-2"><i class="bi bi-heart-pulse me-1"></i>Health (from serial)</h6>
                         <div class="bg-black p-2 rounded" style="font-size: 0.8rem;">
                 `;
                 const h = dev.health;
-                html += `<div class="detail-row"><span class="detail-label">Total Recordings</span><span class="detail-value">${h.tr || 0}</span></div>`;
-                html += `<div class="detail-row"><span class="detail-label">Total Uploaded</span><span class="detail-value">${h.tu || 0}</span></div>`;
+                html += `<div class="detail-row"><span class="detail-label">Recording count (session)</span><span class="detail-value">${h.rc !== undefined ? h.rc : '-'}</span></div>`;
+                html += `<div class="detail-row"><span class="detail-label">Uploaded count (session)</span><span class="detail-value">${h.uc !== undefined ? h.uc : '-'}</span></div>`;
+                html += `<div class="detail-row"><span class="detail-label">Pending queue</span><span class="detail-value">${h.pq !== undefined ? h.pq : '-'}</span></div>`;
+                html += `<div class="detail-row"><span class="detail-label">Total duration (s)</span><span class="detail-value">${h.td !== undefined ? h.td : '-'}</span></div>`;
                 html += `<div class="detail-row"><span class="detail-label">Storage</span><span class="detail-value">${h.st || '-'}</span></div>`;
-                html += `<div class="detail-row"><span class="detail-label">Size</span><span class="detail-value">${h.su || '-'} / ${h.sz || '-'}</span></div>`;
-                html += `<div class="detail-row"><span class="detail-label">Heap</span><span class="detail-value">${h.hu || '-'} / ${h.ht || '-'}</span></div>`;
+                html += `<div class="detail-row"><span class="detail-label">SD in use</span><span class="detail-value">${h.sd !== undefined ? (h.sd ? 'Yes' : 'No') : '-'}</span></div>`;
+                html += `<div class="detail-row"><span class="detail-label">Storage util %</span><span class="detail-value">${h.su !== undefined && h.su !== null ? h.su : '-'}</span></div>`;
+                html += `<div class="detail-row"><span class="detail-label">Heap</span><span class="detail-value">${h.hf || '-'} / ${h.ht || '-'}</span></div>`;
                 html += `<div class="detail-row"><span class="detail-label">PSRAM</span><span class="detail-value">${h.pu || '-'} / ${h.pt || '-'}</span></div>`;
-                html += `<div class="detail-row"><span class="detail-label">Time Valid</span><span class="detail-value">${h.tm ? 'Yes' : 'No'}</span></div>`;
-                html += `<div class="detail-row"><span class="detail-label">Current Time</span><span class="detail-value">${h.ct || '-'}</span></div>`;
+                html += `<div class="detail-row"><span class="detail-label">Time valid</span><span class="detail-value">${h.tm ? 'Yes' : 'No'}</span></div>`;
+                html += `<div class="detail-row"><span class="detail-label">WiFi</span><span class="detail-value">${h.wi ? 'Yes' : 'No'}</span></div>`;
+                html += `<div class="detail-row"><span class="detail-label">IP</span><span class="detail-value">${h.ip || '-'}</span></div>`;
+                html += `<div class="detail-row"><span class="detail-label">RSSI</span><span class="detail-value">${h.ri !== undefined ? h.ri : '-'}</span></div>`;
+                html += `<div class="detail-row"><span class="detail-label">Uptime (s)</span><span class="detail-value">${h.ut !== undefined ? h.ut : '-'}</span></div>`;
+                html += `<div class="detail-row"><span class="detail-label">Warnings</span><span class="detail-value">${h.wc !== undefined ? h.wc : '-'}</span></div>`;
+                html += `<div class="detail-row"><span class="detail-label">Errors</span><span class="detail-value">${h.ec !== undefined ? h.ec : '-'}</span></div>`;
+                html += `<div class="detail-row"><span class="detail-label">Fatal</span><span class="detail-value">${h.fc !== undefined ? h.fc : '-'}</span></div>`;
                 
-                // Upload pending
-                if (h.up) {
-                    html += `<div class="detail-row"><span class="detail-label">Pending Files</span><span class="detail-value">${h.up.tp || 0}</span></div>`;
-                    html += `<div class="detail-row"><span class="detail-label">NVS Queue</span><span class="detail-value">${h.up.nq || 0}</span></div>`;
-                }
-                
-                // Yearly summary
                 if (h.yr) {
                     html += `<div class="detail-row"><span class="detail-label">Year ${h.yr} Files</span><span class="detail-value">${h.yf || 0}</span></div>`;
                     html += `<div class="detail-row"><span class="detail-label">Year ${h.yr} Size</span><span class="detail-value">${h.ys || '-'}</span></div>`;
@@ -1445,45 +1474,53 @@
             
             // 4-Column Layout for KPIs (responsive: col-6 on mobile, col-3 on desktop)
             
-            // Column 1: Storage KPIs
+            // Column 1: Storage (Total Size + Usage % from serial)
             html += '<div class="col-6 col-md-3">';
             html += '<div class="small text-muted mb-1">💾 Storage</div>';
-            const sdAvail = health.sd !== undefined ? health.sd : dev.sd_available;
-            if (sdAvail && (dev.storage_size !== undefined || dev.storage_used !== undefined)) {
-                // Show total and free if available
-                const totalGB = dev.storage_size !== undefined && typeof dev.storage_size === 'number' ? dev.storage_size.toFixed(2) : '-';
-                const usedGB = dev.storage_used !== undefined && typeof dev.storage_used === 'number' ? dev.storage_used.toFixed(2) : '-';
-                const freeGB = (totalGB !== '-' && usedGB !== '-') ? (dev.storage_size - dev.storage_used).toFixed(2) : '-';
-                html += `<div class="mb-1"><small>T: ${totalGB} GB</small></div>`;
-                html += `<div class="mb-1"><small>F: ${freeGB} GB</small></div>`;
-            } else {
-                html += `<div class="mb-1"><small class="text-muted">Unavailable</small></div>`;
+            const storagePct = (health.su !== undefined && health.su !== null) ? health.su : (dev.storage_percent !== undefined && dev.storage_percent !== null) ? dev.storage_percent : null;
+            const rawTotal = dev.storage_size != null ? dev.storage_size : health.sz;
+            const totalSizeStr = rawTotal != null ? (typeof rawTotal === 'number' ? rawTotal.toFixed(2) + ' GB' : String(rawTotal)) : '-';
+            if (totalSizeStr !== '-') {
+                html += `<div class="mb-1"><small>Total: ${totalSizeStr}</small></div>`;
+            }
+            if (storagePct !== null && typeof storagePct === 'number') {
+                html += `<div class="mb-1"><small>Usage: ${storagePct.toFixed(2)}%</small></div>`;
+            } else if (totalSizeStr === '-') {
+                html += `<div class="mb-1"><small class="text-muted">-</small></div>`;
             }
             html += '</div>';
             
-            // Column 2: Memory KPIs
+            // Column 2: Memory (% used) and PSRAM (% used) from serial
             html += '<div class="col-6 col-md-3">';
             html += '<div class="small text-muted mb-1">🧠 Memory</div>';
+            const parseMemory = (memStr) => {
+                if (!memStr || typeof memStr !== 'string') return null;
+                const match = memStr.match(/^([\d.]+)([KM])?$/i);
+                if (!match) return null;
+                let value = parseFloat(match[1]);
+                const unit = match[2]?.toUpperCase();
+                if (unit === 'K') value *= 1024;
+                else if (unit === 'M') value *= 1024 * 1024;
+                return value;
+            };
             if (health.ht && health.hf) {
-                // Calculate free percentage from heap_total and heap_free
-                // Parse formatted strings like "285.00K" or "133.00K"
-                const parseMemory = (memStr) => {
-                    if (!memStr || typeof memStr !== 'string') return null;
-                    const match = memStr.match(/^([\d.]+)([KM])?$/i);
-                    if (!match) return null;
-                    let value = parseFloat(match[1]);
-                    const unit = match[2]?.toUpperCase();
-                    if (unit === 'K') value *= 1024;
-                    else if (unit === 'M') value *= 1024 * 1024;
-                    return value;
-                };
                 const totalBytes = parseMemory(health.ht);
                 const freeBytes = parseMemory(health.hf);
                 if (totalBytes && freeBytes && totalBytes > 0) {
-                    const freePercent = ((freeBytes / totalBytes) * 100).toFixed(1);
-                    html += `<div class="mb-1"><small>Free: ${freePercent}%</small></div>`;
+                    const usedPercent = ((1 - freeBytes / totalBytes) * 100).toFixed(1);
+                    html += `<div class="mb-1"><small>${usedPercent}% used</small></div>`;
                 } else {
                     html += `<div class="mb-1"><small>${health.hf}</small></div>`;
+                }
+            } else {
+                html += `<div class="mb-1"><small class="text-muted">-</small></div>`;
+            }
+            if (health.pt && health.pu) {
+                const ptBytes = parseMemory(health.pt);
+                const puBytes = parseMemory(health.pu);
+                if (ptBytes && puBytes && ptBytes > 0) {
+                    const psramUsedPercent = ((puBytes / ptBytes) * 100).toFixed(1);
+                    html += `<div class="mb-1 mt-1"><small>PSRAM: ${psramUsedPercent}% used</small></div>`;
                 }
             }
             html += '</div>';

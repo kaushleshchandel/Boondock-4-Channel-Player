@@ -1,4 +1,4 @@
-# Boondock Monitor
+# Boondock 4 Channel Player
 
 A web-based monitoring application that supports device management, audio playback, and serial communication.
 

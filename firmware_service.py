@@ -137,13 +137,13 @@ class FirmwareService:
                 'returncode': -1
             }
     
-    def flash_firmware(self, port, firmware_id, firmware_path, bootloader_path=None, partition_path=None):
+    def flash_firmware(self, port, firmware_id, firmware_path, bootloader_path=None, partition_path=None, erase_before_flash=True):
         """
         Flash firmware to ESP32 device.
         
         This method:
         1. Disconnects serial port from monitoring
-        2. Erases flash
+        2. Optionally erases flash (if erase_before_flash is True)
         3. Writes firmware files
         4. Reconnects serial port
         
@@ -155,6 +155,7 @@ class FirmwareService:
             firmware_path: Path to firmware.bin
             bootloader_path: Optional path to bootloader.bin
             partition_path: Optional path to partitions.bin
+            erase_before_flash: If True, run full chip erase before writing (default True)
         
         Returns:
             dict with success status
@@ -196,18 +197,16 @@ class FirmwareService:
             }
         
         try:
-            # Step 1: Erase flash
-            output_queue.put(('status', 'Erasing flash memory...', False))
-            erase_result = self._run_esptool_streaming(port, ['erase-flash'], [], output_queue)
-            
-            # Wait a moment after erase completes
-            time.sleep(0.5)
-            
-            if not erase_result['success']:
-                return {
-                    'success': False,
-                    'error': f'Failed to erase flash (return code: {erase_result.get("returncode", -1)})'
-                }
+            # Step 1: Optionally erase flash
+            if erase_before_flash:
+                output_queue.put(('status', 'Erasing flash memory...', False))
+                erase_result = self._run_esptool_streaming(port, ['erase-flash'], [], output_queue)
+                time.sleep(0.5)
+                if not erase_result['success']:
+                    return {
+                        'success': False,
+                        'error': f'Failed to erase flash (return code: {erase_result.get("returncode", -1)})'
+                    }
             
             # Step 2: Build write-flash command
             flash_args = []

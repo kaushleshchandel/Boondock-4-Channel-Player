@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Terminal - Boondock Monitor</title>
+    <title>Terminal - Boondock 4 Channel Player</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -113,29 +113,6 @@
             border-color: var(--accent-primary) !important;
             box-shadow: 0 0 10px var(--hover-bg) !important;
         }
-        
-        /* LLM Analysis Panel */
-        .llm-panel {
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            margin-top: 1rem;
-            box-shadow: 0 2px 10px var(--shadow);
-        }
-        .llm-response {
-            background: var(--bg-dark);
-            border-radius: 6px;
-            padding: 1rem;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.85rem;
-            white-space: pre-wrap;
-            max-height: 300px;
-            overflow-y: auto;
-            color: var(--text-primary);
-        }
-        .llm-response.loading {
-            color: var(--accent-info);
-        }
     </style>
 </head>
 <body>
@@ -151,7 +128,7 @@
             <ul class="nav d-none d-md-flex">
                 <li class="nav-item">
                     <a class="nav-link" href="/">
-                        <i class="bi bi-soundwave me-2"></i>Boondock Monitor
+                        <i class="bi bi-soundwave me-2"></i>Boondock 4 Channel Player
                     </a>
                 </li>
                 <li class="nav-item">
@@ -201,7 +178,7 @@
         <div class="offcanvas-body">
             <nav class="nav flex-column">
                 <a class="nav-link text-light py-3 border-bottom border-secondary" href="/">
-                    <i class="bi bi-soundwave me-3"></i>Boondock Monitor
+                    <i class="bi bi-soundwave me-3"></i>Boondock 4 Channel Player
                 </a>
                 <a class="nav-link text-light py-3 border-bottom border-secondary active" href="/terminal">
                     <i class="bi bi-terminal me-3"></i>Terminal
@@ -290,35 +267,6 @@
                                 <input class="form-check-input" type="radio" name="sendTarget" id="sendSelected" value="selected">
                                 <label class="form-check-label small text-muted" for="sendSelected">Selected only</label>
                             </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- LLM Analysis Panel -->
-                <div class="llm-panel mt-3">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <span><i class="bi bi-robot me-2 text-info"></i>LLM Log Analysis</span>
-                        <div class="d-flex gap-2 align-items-center">
-                            <select class="form-select form-select-sm" id="llmModel" style="width: auto; background: var(--bg-dark); color: var(--text-primary); border-color: var(--border-color);">
-                                <option>Loading models...</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="card-body">
-                        <div class="mb-2">
-                            <textarea class="form-control command-input" id="llmPrompt" rows="2" 
-                                placeholder="Custom prompt (optional)...">Analyze these serial logs. Identify any errors, warnings, or unusual patterns. Summarize key events.</textarea>
-                        </div>
-                        <div class="d-flex gap-2 mb-3">
-                            <button class="btn btn-info btn-sm" onclick="analyzeLogs()">
-                                <i class="bi bi-cpu me-1"></i>Analyze Visible Logs
-                            </button>
-                            <button class="btn btn-outline-info btn-sm" onclick="analyzeSelectedLogs()">
-                                <i class="bi bi-check2-square me-1"></i>Analyze Last 50 Lines
-                            </button>
-                        </div>
-                        <div class="llm-response" id="llmResponse">
-                            Response will appear here...
                         </div>
                     </div>
                 </div>
@@ -548,60 +496,6 @@
             div.textContent = text;
             return div.innerHTML;
         }
-
-        // LLM Functions
-        async function loadLlmModels() {
-            try {
-                const models = await api('/llm/models');
-                const select = document.getElementById('llmModel');
-                if (Array.isArray(models) && models.length > 0) {
-                    select.innerHTML = models.map(m => `<option value="${m}">${m}</option>`).join('');
-                } else {
-                    select.innerHTML = '<option>No models found</option>';
-                }
-            } catch (e) {
-                document.getElementById('llmModel').innerHTML = '<option>Error loading models</option>';
-            }
-        }
-
-        async function analyzeLogs() {
-            const terminal = document.getElementById('terminal');
-            const lines = terminal.querySelectorAll('.terminal-line');
-            const logs = Array.from(lines).map(l => l.textContent).join('\n');
-            await sendToLlm(logs);
-        }
-
-        async function analyzeSelectedLogs() {
-            const terminal = document.getElementById('terminal');
-            const lines = terminal.querySelectorAll('.terminal-line');
-            const lastLines = Array.from(lines).slice(-50).map(l => l.textContent).join('\n');
-            await sendToLlm(lastLines);
-        }
-
-        async function sendToLlm(logs) {
-            const responseEl = document.getElementById('llmResponse');
-            const prompt = document.getElementById('llmPrompt').value;
-            const model = document.getElementById('llmModel').value;
-            
-            responseEl.textContent = 'Analyzing logs...';
-            responseEl.classList.add('loading');
-            
-            try {
-                const result = await api('/llm/analyze', 'POST', { logs, prompt, model });
-                responseEl.classList.remove('loading');
-                if (result.error) {
-                    responseEl.textContent = 'Error: ' + result.error;
-                } else {
-                    responseEl.textContent = result.response;
-                }
-            } catch (e) {
-                responseEl.classList.remove('loading');
-                responseEl.textContent = 'Error: ' + e.message;
-            }
-        }
-
-        // Load models on page load
-        loadLlmModels();
     </script>
 </body>
 </html>

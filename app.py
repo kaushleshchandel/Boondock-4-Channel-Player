@@ -1,4 +1,4 @@
-"""Flask application for Boondock Monitor."""
+"""Flask application for Boondock 4 Channel Player."""
 import os
 import uuid
 import threading
@@ -6,7 +6,7 @@ import time
 import json
 import queue
 from datetime import datetime
-from flask import Flask, render_template, request, jsonify, Response, stream_with_context, redirect
+from flask import Flask, render_template, request, jsonify, Response, stream_with_context, redirect, send_file
 from werkzeug.utils import secure_filename
 from config import Config
 from models import init_db, AudioStream, AudioFile, OutputChannel, NoiseProfile, DeviceAlias, Firmware
@@ -700,6 +700,21 @@ def get_all_history_devices():
     devices = serial_service.get_all_devices_with_history()
     return jsonify(devices)
 
+@app.route('/api/serial/history/clear-all', methods=['POST'])
+def clear_all_history():
+    """Clear all serial history for all devices."""
+    result = serial_service.clear_all_history()
+    status = 200 if result.get('success') else 500
+    return jsonify(result), status
+
+@app.route('/api/serial/sessions/clear-all', methods=['POST'])
+def clear_all_sessions():
+    """Clear all sessions (in-memory and persisted)."""
+    from log_summary_service import log_summary_service
+    result = log_summary_service.clear_all_sessions()
+    status = 200 if result.get('success') else 500
+    return jsonify(result), status
+
 @app.route('/api/serial/history/<mac>/dates', methods=['GET'])
 def get_history_dates(mac):
     mac = normalize_mac(mac)
@@ -848,37 +863,26 @@ def create_firmware():
     firmware_filename = None
     bootloader_filename = None
     partition_filename = None
-    
-    # Save firmware file
-    if 'firmware' in request.files:
-        firmware_file = request.files['firmware']
-        if firmware_file.filename:
-            if not firmware_file.filename.lower().endswith('.bin'):
-                return jsonify({'error': 'Firmware file must be a .bin file'}), 400
-            firmware_filename = f"{uuid.uuid4()}.bin"
-            firmware_path = os.path.join(Config.FIRMWARE_FOLDER, firmware_filename)
-            firmware_file.save(firmware_path)
-    
-    # Save bootloader file
-    if 'bootloader' in request.files:
-        bootloader_file = request.files['bootloader']
-        if bootloader_file.filename:
-            if not bootloader_file.filename.lower().endswith('.bin'):
-                return jsonify({'error': 'Bootloader file must be a .bin file'}), 400
-            bootloader_filename = f"{uuid.uuid4()}.bin"
-            bootloader_path = os.path.join(Config.FIRMWARE_FOLDER, bootloader_filename)
-            bootloader_file.save(bootloader_path)
-    
-    # Save partition file
-    if 'partition' in request.files:
-        partition_file = request.files['partition']
-        if partition_file.filename:
-            if not partition_file.filename.lower().endswith('.bin'):
-                return jsonify({'error': 'Partition file must be a .bin file'}), 400
-            partition_filename = f"{uuid.uuid4()}.bin"
-            partition_path = os.path.join(Config.FIRMWARE_FOLDER, partition_filename)
-            partition_file.save(partition_path)
-    
+
+    # Process in order: 1. Bootloader, 2. Firmware, 3. Partitions. Validate exact filenames.
+    for file_key, required_name in [('bootloader', 'bootloader.bin'), ('firmware', 'firmware.bin'), ('partition', 'partitions.bin')]:
+        if file_key not in request.files:
+            continue
+        f = request.files[file_key]
+        if not f.filename:
+            continue
+        if f.filename.lower() != required_name:
+            return jsonify({'error': f'File must be named exactly "{required_name}" (got "{f.filename}")'}), 400
+        fn = f"{uuid.uuid4()}.bin"
+        path = os.path.join(Config.FIRMWARE_FOLDER, fn)
+        f.save(path)
+        if file_key == 'bootloader':
+            bootloader_filename = fn
+        elif file_key == 'firmware':
+            firmware_filename = fn
+        else:
+            partition_filename = fn
+
     firmware_id = Firmware.create(name, firmware_filename, bootloader_filename, partition_filename)
     return jsonify({
         'id': firmware_id,
@@ -892,6 +896,24 @@ def create_firmware():
 def delete_firmware(firmware_id):
     Firmware.delete(firmware_id)
     return jsonify({'success': True})
+
+@app.route('/api/firmwares/<int:firmware_id>/download/<file_type>', methods=['GET'])
+def download_firmware_file(firmware_id, file_type):
+    """Download bootloader.bin, firmware.bin, or partitions.bin for a firmware."""
+    if file_type not in ('bootloader', 'firmware', 'partition'):
+        return jsonify({'error': 'Invalid file type'}), 400
+    firmware = Firmware.get(firmware_id)
+    if not firmware:
+        return jsonify({'error': 'Firmware not found'}), 404
+    key = 'bootloader_filename' if file_type == 'bootloader' else 'firmware_filename' if file_type == 'firmware' else 'partition_filename'
+    stored_name = firmware.get(key)
+    if not stored_name:
+        return jsonify({'error': f'No {file_type} file for this firmware'}), 404
+    path = os.path.join(Config.FIRMWARE_FOLDER, stored_name)
+    if not os.path.isfile(path):
+        return jsonify({'error': 'File not found on server'}), 404
+    download_name = 'bootloader.bin' if file_type == 'bootloader' else 'firmware.bin' if file_type == 'firmware' else 'partitions.bin'
+    return send_file(path, as_attachment=True, download_name=download_name)
 
 @app.route('/api/firmwares/<int:firmware_id>/flash', methods=['POST'])
 def flash_firmware(firmware_id):
@@ -1025,18 +1047,20 @@ def flash_all_firmware():
     if firmware['partition_filename']:
         partition_path = os.path.join(Config.FIRMWARE_FOLDER, firmware['partition_filename'])
     
+    erase_before_flash = data.get('erase_before_flash', False)
+    
     # Start flashing each device in a separate thread
     for port in ports:
-        def flash_thread(device_port):
+        def flash_thread(device_port, do_erase):
             firmware_service.flash_firmware(
-                device_port, 
-                firmware_id, 
-                firmware_path, 
-                bootloader_path, 
-                partition_path
+                device_port,
+                firmware_id,
+                firmware_path,
+                bootloader_path,
+                partition_path,
+                erase_before_flash=do_erase
             )
-        
-        thread = threading.Thread(target=flash_thread, args=(port,), daemon=True)
+        thread = threading.Thread(target=flash_thread, args=(port, erase_before_flash), daemon=True)
         thread.start()
     
     return jsonify({
@@ -1121,5 +1145,5 @@ def stream_flash_all_output():
 
 if __name__ == '__main__':
     from waitress import serve
-    print(f"Starting Boondock Monitor on http://{Config.HOST}:{Config.PORT}")
+    print(f"Starting Boondock 4 Channel Player on http://{Config.HOST}:{Config.PORT}")
     serve(app, host=Config.HOST, port=Config.PORT)

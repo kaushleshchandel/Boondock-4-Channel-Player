@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Firmware - Boondock Monitor</title>
+    <title>Firmware - Boondock 4 Channel Player</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -83,7 +83,7 @@
             <ul class="nav d-none d-md-flex">
                 <li class="nav-item">
                     <a class="nav-link" href="/">
-                        <i class="bi bi-soundwave me-2"></i>Boondock Monitor
+                        <i class="bi bi-soundwave me-2"></i>Boondock 4 Channel Player
                     </a>
                 </li>
                 <li class="nav-item">
@@ -133,7 +133,7 @@
         <div class="offcanvas-body">
             <nav class="nav flex-column">
                 <a class="nav-link text-light py-3 border-bottom border-secondary" href="/">
-                    <i class="bi bi-soundwave me-3"></i>Boondock Monitor
+                    <i class="bi bi-soundwave me-3"></i>Boondock 4 Channel Player
                 </a>
                 <a class="nav-link text-light py-3 border-bottom border-secondary" href="/terminal">
                     <i class="bi bi-terminal me-3"></i>Terminal
@@ -201,32 +201,33 @@
                             <label class="form-label">Firmware Name</label>
                             <input type="text" class="form-control bg-dark text-light border-secondary" id="firmwareName" placeholder="e.g. v1.0.0" required>
                         </div>
-                        
-                        <div class="upload-area mb-3">
-                            <i class="bi bi-file-earmark-binary display-4 d-block mb-2 text-muted"></i>
-                            <label class="file-input-label">
-                                <input type="file" id="firmwareFile" accept=".bin" class="d-none">
-                                <i class="bi bi-upload me-1"></i>Select Firmware (.bin)
-                            </label>
-                            <div class="mt-2 small text-muted" id="firmwareFileName">No file selected</div>
-                        </div>
+                        <p class="small text-muted mb-3">Upload in order: 1. Bootloader, 2. Firmware, 3. Partitions. File names must be exactly <code>bootloader.bin</code>, <code>firmware.bin</code>, <code>partitions.bin</code>.</p>
                         
                         <div class="upload-area mb-3">
                             <i class="bi bi-file-earmark-code display-4 d-block mb-2 text-muted"></i>
                             <label class="file-input-label">
                                 <input type="file" id="bootloaderFile" accept=".bin" class="d-none">
-                                <i class="bi bi-upload me-1"></i>Select Bootloader (.bin)
+                                <i class="bi bi-upload me-1"></i>1. Select Bootloader (must be named bootloader.bin)
                             </label>
-                            <div class="mt-2 small text-muted" id="bootloaderFileName">No file selected (optional)</div>
+                            <div class="mt-2 small text-muted" id="bootloaderFileName">No file selected</div>
+                        </div>
+                        
+                        <div class="upload-area mb-3">
+                            <i class="bi bi-file-earmark-binary display-4 d-block mb-2 text-muted"></i>
+                            <label class="file-input-label">
+                                <input type="file" id="firmwareFile" accept=".bin" class="d-none">
+                                <i class="bi bi-upload me-1"></i>2. Select Firmware (must be named firmware.bin)
+                            </label>
+                            <div class="mt-2 small text-muted" id="firmwareFileName">No file selected</div>
                         </div>
                         
                         <div class="upload-area mb-3">
                             <i class="bi bi-file-earmark-text display-4 d-block mb-2 text-muted"></i>
                             <label class="file-input-label">
                                 <input type="file" id="partitionFile" accept=".bin" class="d-none">
-                                <i class="bi bi-upload me-1"></i>Select Partition Table (.bin)
+                                <i class="bi bi-upload me-1"></i>3. Select Partitions (must be named partitions.bin)
                             </label>
-                            <div class="mt-2 small text-muted" id="partitionFileName">No file selected (optional)</div>
+                            <div class="mt-2 small text-muted" id="partitionFileName">No file selected</div>
                         </div>
                     </form>
                 </div>
@@ -337,6 +338,13 @@
                         </div>
                     </div>
                     
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="flashAllEraseFirst">
+                        <label class="form-check-label text-light" for="flashAllEraseFirst">
+                            Erase flash completely before flashing
+                        </label>
+                    </div>
+                    
                     <div class="alert alert-warning">
                         <i class="bi bi-exclamation-triangle me-2"></i>
                         This will flash all selected devices simultaneously. Make sure devices are in bootloader mode if needed.
@@ -391,6 +399,8 @@
         let firmwares = [];
         let devices = [];
         let progressModal = null;
+        let flashAllSelectedPorts = new Set();
+        let flashAllSelectAll = false;
 
         document.addEventListener('DOMContentLoaded', () => {
             loadFirmwares();
@@ -408,11 +418,11 @@
             });
             document.getElementById('bootloaderFile').addEventListener('change', (e) => {
                 const file = e.target.files[0];
-                document.getElementById('bootloaderFileName').textContent = file ? file.name : 'No file selected (optional)';
+                document.getElementById('bootloaderFileName').textContent = file ? file.name : 'No file selected';
             });
             document.getElementById('partitionFile').addEventListener('change', (e) => {
                 const file = e.target.files[0];
-                document.getElementById('partitionFileName').textContent = file ? file.name : 'No file selected (optional)';
+                document.getElementById('partitionFileName').textContent = file ? file.name : 'No file selected';
             });
         }
 
@@ -420,9 +430,19 @@
             // Reset form
             document.getElementById('firmwareUploadForm').reset();
             document.getElementById('firmwareFileName').textContent = 'No file selected';
-            document.getElementById('bootloaderFileName').textContent = 'No file selected (optional)';
-            document.getElementById('partitionFileName').textContent = 'No file selected (optional)';
+            document.getElementById('bootloaderFileName').textContent = 'No file selected';
+            document.getElementById('partitionFileName').textContent = 'No file selected';
             new bootstrap.Modal(document.getElementById('uploadModal')).show();
+        }
+
+        const REQUIRED_FIRMWARE_NAMES = { bootloader: 'bootloader.bin', firmware: 'firmware.bin', partition: 'partitions.bin' };
+        function validateFirmwareFile(file, type) {
+            if (!file) return null;
+            const required = REQUIRED_FIRMWARE_NAMES[type];
+            if (file.name.toLowerCase() !== required) {
+                return 'File must be named exactly "' + required + '" (got "' + file.name + '")';
+            }
+            return null;
         }
 
         async function submitUploadForm() {
@@ -432,8 +452,8 @@
                 return;
             }
             
-            const firmwareFile = document.getElementById('firmwareFile').files[0];
             const bootloaderFile = document.getElementById('bootloaderFile').files[0];
+            const firmwareFile = document.getElementById('firmwareFile').files[0];
             const partitionFile = document.getElementById('partitionFile').files[0];
             
             if (!firmwareFile && !bootloaderFile && !partitionFile) {
@@ -441,10 +461,17 @@
                 return;
             }
             
+            const err1 = validateFirmwareFile(bootloaderFile, 'bootloader');
+            const err2 = validateFirmwareFile(firmwareFile, 'firmware');
+            const err3 = validateFirmwareFile(partitionFile, 'partition');
+            if (err1) { alert(err1); return; }
+            if (err2) { alert(err2); return; }
+            if (err3) { alert(err3); return; }
+            
             const formData = new FormData();
             formData.append('name', name);
-            if (firmwareFile) formData.append('firmware', firmwareFile);
             if (bootloaderFile) formData.append('bootloader', bootloaderFile);
+            if (firmwareFile) formData.append('firmware', firmwareFile);
             if (partitionFile) formData.append('partition', partitionFile);
             
             const uploadModal = bootstrap.Modal.getInstance(document.getElementById('uploadModal'));
@@ -509,9 +536,9 @@
                         <div class="flex-grow-1">
                             <h6 class="mb-2">${escapeHtml(fw.name)}</h6>
                             <div class="small text-muted mb-2">
-                                <div class="mb-1">${fw.firmware_filename ? '<i class="bi bi-check-circle text-success me-1"></i>Firmware' : '<i class="bi bi-x-circle text-muted me-1"></i>No firmware'}</div>
-                                <div class="mb-1">${fw.bootloader_filename ? '<i class="bi bi-check-circle text-success me-1"></i>Bootloader' : '<i class="bi bi-x-circle text-muted me-1"></i>No bootloader'}</div>
-                                <div>${fw.partition_filename ? '<i class="bi bi-check-circle text-success me-1"></i>Partition' : '<i class="bi bi-x-circle text-muted me-1"></i>No partition'}</div>
+                                <div class="mb-1">${fw.bootloader_filename ? '<i class="bi bi-check-circle text-success me-1"></i>Bootloader' : '<i class="bi bi-x-circle text-muted me-1"></i>No bootloader'} ${fw.bootloader_filename ? `<a href="/api/firmwares/${fw.id}/download/bootloader" class="link-info ms-1" download="bootloader.bin" title="Download bootloader.bin"><i class="bi bi-download"></i></a>` : ''}</div>
+                                <div class="mb-1">${fw.firmware_filename ? '<i class="bi bi-check-circle text-success me-1"></i>Firmware' : '<i class="bi bi-x-circle text-muted me-1"></i>No firmware'} ${fw.firmware_filename ? `<a href="/api/firmwares/${fw.id}/download/firmware" class="link-info ms-1" download="firmware.bin" title="Download firmware.bin"><i class="bi bi-download"></i></a>` : ''}</div>
+                                <div class="mb-1">${fw.partition_filename ? '<i class="bi bi-check-circle text-success me-1"></i>Partitions' : '<i class="bi bi-x-circle text-muted me-1"></i>No partitions'} ${fw.partition_filename ? `<a href="/api/firmwares/${fw.id}/download/partition" class="link-info ms-1" download="partitions.bin" title="Download partitions.bin"><i class="bi bi-download"></i></a>` : ''}</div>
                             </div>
                             <div class="small text-muted">
                                 <i class="bi bi-clock me-1"></i>${new Date(fw.created_at).toLocaleString()}
@@ -832,6 +859,8 @@
             closeButton.style.display = 'block';
             document.getElementById('flashAllStatusDetails').textContent = '';
             document.getElementById('flashAllStatusSummary').innerHTML = '<div class="small text-muted">Preparing...</div>';
+            flashAllSelectedPorts = new Set();
+            flashAllSelectAll = false;
             
             // Render device list with checkboxes
             renderFlashAllDeviceList();
@@ -841,11 +870,17 @@
 
         function renderFlashAllDeviceList() {
             const container = document.getElementById('flashAllDeviceList');
+            const selectAllEl = document.getElementById('selectAllDevices');
+            const existingCheckboxes = container.querySelectorAll('.device-checkbox');
+            if (existingCheckboxes.length > 0) {
+                flashAllSelectedPorts = new Set(Array.from(document.querySelectorAll('.device-checkbox:checked')).map(cb => cb.value));
+                flashAllSelectAll = selectAllEl ? selectAllEl.checked : false;
+            }
             if (devices.length === 0) {
                 container.innerHTML = '<div class="text-center text-muted py-3">No devices available</div>';
                 return;
             }
-            
+
             container.innerHTML = devices.map(dev => `
                 <div class="form-check mb-2">
                     <input class="form-check-input device-checkbox" type="checkbox" value="${escapeHtml(dev.port)}" id="device-${escapeHtml(dev.port)}" ${!dev.connected ? 'disabled' : ''}>
@@ -858,6 +893,15 @@
                     </label>
                 </div>
             `).join('');
+
+            const enabledCheckboxes = document.querySelectorAll('.device-checkbox:not(:disabled)');
+            enabledCheckboxes.forEach(cb => {
+                cb.checked = flashAllSelectedPorts.has(cb.value) || flashAllSelectAll;
+            });
+            if (selectAllEl) {
+                const checkedCount = document.querySelectorAll('.device-checkbox:checked').length;
+                selectAllEl.checked = flashAllSelectAll || (enabledCheckboxes.length > 0 && enabledCheckboxes.length === checkedCount);
+            }
         }
 
         function toggleAllDevices() {
@@ -907,7 +951,8 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         firmware_id: firmwareId,
-                        ports: selectedDevices
+                        ports: selectedDevices,
+                        erase_before_flash: document.getElementById('flashAllEraseFirst').checked
                     })
                 });
                 

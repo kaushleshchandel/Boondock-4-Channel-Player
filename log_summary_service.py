@@ -2,6 +2,7 @@
 import json
 import os
 import re
+import shutil
 import threading
 import time
 from datetime import datetime, date, timedelta
@@ -314,7 +315,14 @@ class LogSummaryService:
         self.port_active_session.pop(port, None)
     
     def process_message(self, port, mac, timestamp, message, msg_type='received'):
-        """Process a message and update session data using session ID."""
+        """Process a serial message and update session data.
+        
+        Sessions are determined by the serial message tag **si** (session ID). Each device
+        sends si in messages (e.g. health, short, config, log). When si changes for a
+        device (e.g. after reboot), that indicates a new session: the previous session
+        is closed and persisted to Sessions history (log_summary/<mac>/<date>.json),
+        and a new session is started for the new si.
+        """
         if not port:
             return
         
@@ -322,14 +330,21 @@ class LogSummaryService:
         if mac:
             mac = mac.replace(':', '').replace('-', '').upper()
         
+        # Extract session ID (si) and MAC (mc) from message - these drive session identity
+        session_id = None
+        json_data = None
+        if msg_type == 'received':
+            json_data = self._parse_message_content(message)
+            if json_data and isinstance(json_data, dict):
+                session_id = self._extract_session_id(json_data)
+                if not mac and json_data.get('mc'):
+                    mac = (json_data.get('mc') or '').replace(':', '').replace('-', '').upper()
+            if not session_id:
+                session_id = self._extract_session_id_from_message(message)
+        
         # Update last message time for timeout detection
         with self.lock:
             self.last_message_time[port] = timestamp
-        
-        # Extract session ID from message
-        session_id = None
-        if msg_type == 'received':
-            session_id = self._extract_session_id_from_message(message)
         
         # Get date from timestamp
         try:
@@ -338,25 +353,22 @@ class LogSummaryService:
         except:
             date_str = date.today().isoformat()
         
-        # Extract firmware from message if present (before checking session)
+        # Extract firmware from message if present
         firmware_from_message = None
         if msg_type == 'received':
-            json_data = self._parse_message_content(message)
+            if not json_data:
+                json_data = self._parse_message_content(message)
             if json_data and isinstance(json_data, dict):
-                msg_type_field = json_data.get('ty')
-                if msg_type_field == 'config':
+                if json_data.get('ty') == 'config':
                     firmware_from_message = json_data.get('fw')
-            # Also check nested JSON
             if not firmware_from_message:
                 firmware_match = re.search(r'\{"ty"\s*:\s*"config"[^}]*"fw"\s*:\s*"([^"]+)"', message)
                 if firmware_match:
                     firmware_from_message = firmware_match.group(1)
         
-        # If we have firmware data but no session_id, try to find existing session by port
-        # and update firmware, or create session if needed
+        # If we have firmware but no si in this message, just update existing session if any
         if firmware_from_message and not session_id:
             with self.lock:
-                # Check if there's an active session for this port
                 if port in self.port_active_session:
                     session_key = self.port_active_session[port]
                     if session_key in self.active_sessions:
@@ -365,19 +377,39 @@ class LogSummaryService:
                         session['end'] = timestamp
                         if mac:
                             session['mac'] = mac
-                        # Save summary
                         if mac:
                             summary = self._load_summary(mac, date_str)
                             self._save_summary(mac, date_str, summary)
                         return
+            return
         
-        # If no session ID found, skip session tracking (but still update timeout)
+        # No session ID in message: skip session tracking (si is required for session identity)
         if not session_id:
             return
         
         session_key = (port, session_id)
         
         with self.lock:
+            # Session boundary: si changed = new device session. Close current session for this port if si differs.
+            if port in self.port_active_session:
+                current_key = self.port_active_session[port]
+                if current_key != session_key and current_key in self.active_sessions:
+                    old_session = self.active_sessions[current_key]
+                    if old_session.get('session_id') != session_id:
+                        old_session['end'] = timestamp
+                        old_session['is_active'] = False
+                        old_mac = old_session.get('mac', '')
+                        if old_mac:
+                            old_summary = self._load_summary(old_mac, date_str)
+                            old_summary['sessions'].append(old_session)
+                            self._save_summary(old_mac, date_str, old_summary)
+                        if old_mac and old_session.get('session_id'):
+                            old_mac_key = (old_mac, old_session['session_id'])
+                            if self.mac_session_lookup.get(old_mac_key) == current_key:
+                                self.mac_session_lookup.pop(old_mac_key, None)
+                        del self.active_sessions[current_key]
+                    self.port_active_session.pop(port, None)
+            
             # First, check if a session with this MAC and session_id already exists
             # This prevents duplicate sessions for the same device and session ID
             existing_session_key = None
@@ -452,33 +484,8 @@ class LogSummaryService:
                                 self.port_active_session[port] = new_session_key
                                 session_key = new_session_key
             else:
-                # Session doesn't exist - check if we should create new one
-                # First, check if there's an active session for this port with different ID
-                if port in self.port_active_session:
-                    old_session_key = self.port_active_session[port]
-                    if old_session_key != session_key and old_session_key in self.active_sessions:
-                        # Different session ID - close old session
-                        old_session = self.active_sessions[old_session_key]
-                        old_session['end'] = timestamp
-                        old_session['is_active'] = False
-                        
-                        # Save old session
-                        old_mac = old_session.get('mac', '')
-                        if old_mac:
-                            old_summary = self._load_summary(old_mac, date_str)
-                            old_summary['sessions'].append(old_session)
-                            self._save_summary(old_mac, date_str, old_summary)
-                        
-                        # Remove from MAC lookup if exists
-                        if old_mac and old_session.get('session_id'):
-                            old_mac_session_key = (old_mac, old_session['session_id'])
-                            if self.mac_session_lookup.get(old_mac_session_key) == old_session_key:
-                                self.mac_session_lookup.pop(old_mac_session_key, None)
-                        
-                        # Remove old session
-                        del self.active_sessions[old_session_key]
-                
-                # Also check if there's an active session for this MAC with different session_id
+                # Create new session for this (port, si). Old session for this port already closed above if si changed.
+                # Check if there's an active session for this MAC with different session_id (e.g. device moved ports)
                 if mac:
                     mac_session_key = (mac, session_id)
                     # Check all active sessions for this MAC with different session_id
@@ -765,6 +772,23 @@ class LogSummaryService:
                 dates.append(filename.replace('.json', ''))
         
         return sorted(dates, reverse=True)
+
+    def clear_all_sessions(self):
+        """Clear all sessions: in-memory state and all persisted session files."""
+        with self.lock:
+            self.active_sessions.clear()
+            self.port_active_session.clear()
+            self.mac_session_lookup.clear()
+            self.last_message_time.clear()
+        if os.path.exists(LOG_SUMMARY_FOLDER):
+            for name in os.listdir(LOG_SUMMARY_FOLDER):
+                path = os.path.join(LOG_SUMMARY_FOLDER, name)
+                if os.path.isdir(path):
+                    try:
+                        shutil.rmtree(path)
+                    except Exception as e:
+                        return {'success': False, 'error': str(e)}
+        return {'success': True, 'message': 'All sessions cleared'}
 
 # Global instance
 log_summary_service = LogSummaryService()

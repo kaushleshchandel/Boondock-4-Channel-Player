@@ -1,4 +1,4 @@
-// Boondock Monitor - Frontend Application
+// Boondock 4 Channel Player - Frontend Application
 let streams = [];
 let devices = [];
 let outputChannels = [];

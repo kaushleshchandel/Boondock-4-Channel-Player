@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sessions - Boondock Monitor</title>
+    <title>Sessions - Boondock 4 Channel Player</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -121,7 +121,7 @@
             <ul class="nav d-none d-md-flex">
                 <li class="nav-item">
                     <a class="nav-link" href="/">
-                        <i class="bi bi-soundwave me-2"></i>Boondock Monitor
+                        <i class="bi bi-soundwave me-2"></i>Boondock 4 Channel Player
                     </a>
                 </li>
                 <li class="nav-item">
@@ -171,7 +171,7 @@
         <div class="offcanvas-body">
             <nav class="nav flex-column">
                 <a class="nav-link text-light py-3 border-bottom border-secondary" href="/">
-                    <i class="bi bi-soundwave me-3"></i>Boondock Monitor
+                    <i class="bi bi-soundwave me-3"></i>Boondock 4 Channel Player
                 </a>
                 <a class="nav-link text-light py-3 border-bottom border-secondary" href="/terminal">
                     <i class="bi bi-terminal me-3"></i>Terminal
@@ -215,9 +215,12 @@
                     <input type="text" class="form-control form-control-sm" id="searchInput" placeholder="Search..." 
                            style="background: var(--bg-dark); color: var(--text-primary); border-color: var(--border-color);">
                 </div>
-                <div class="col-md-3">
-                    <button class="btn btn-primary btn-sm w-100" onclick="loadSessions()">
+                <div class="col-md-3 d-flex gap-2">
+                    <button class="btn btn-primary btn-sm flex-grow-1" onclick="loadSessions()">
                         <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+                    </button>
+                    <button class="btn btn-outline-danger btn-sm flex-grow-1" onclick="clearAllSessions()" title="Delete all sessions for all devices">
+                        <i class="bi bi-trash me-1"></i>Clear all sessions
                     </button>
                 </div>
             </div>
@@ -239,6 +242,7 @@
                                 <th>Firmware</th>
                                 <th>Device MAC</th>
                                 <th>Device Name</th>
+                                <th>Session ID</th>
                                 <th>Session Start</th>
                                 <th>Session End</th>
                                 <th>Session Duration</th>
@@ -250,6 +254,13 @@
                         <tbody id="sessionsTableBody">
                         </tbody>
                     </table>
+                </div>
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-2">
+                    <div class="text-muted small" id="sessionsPaginationInfo">Showing 0–0 of 0</div>
+                    <nav aria-label="Sessions pagination">
+                        <ul class="pagination pagination-sm mb-0" id="sessionsPagination">
+                        </ul>
+                    </nav>
                 </div>
             </div>
             <div id="noSessions" class="no-sessions" style="display: none;">
@@ -267,8 +278,10 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="/static/js/theme.js"></script>
     <script>
+        const SESSIONS_PAGE_SIZE = 10;
         let allSessions = [];
         let filteredSessions = [];
+        let currentSessionsPage = 1;
 
         document.addEventListener('DOMContentLoaded', () => {
             loadSessions();
@@ -316,6 +329,23 @@
             }
         }
 
+        async function clearAllSessions() {
+            if (!confirm('Clear all sessions for all devices?\n\nThis will permanently delete all session history. This action cannot be undone.')) {
+                return;
+            }
+            try {
+                const response = await fetch('/api/serial/sessions/clear-all', { method: 'POST' });
+                const data = await response.json();
+                if (!response.ok || !data.success) {
+                    throw new Error(data.error || 'Failed to clear sessions');
+                }
+                await loadSessions();
+            } catch (error) {
+                alert('Error: ' + error.message);
+                console.error('Clear all sessions error:', error);
+            }
+        }
+
         async function loadSessions() {
             document.getElementById('loadingSpinner').style.display = 'block';
             document.getElementById('sessionsTable').style.display = 'none';
@@ -360,20 +390,34 @@
                 return matchesFirmware && matchesDevice && matchesSearch;
             });
 
+            currentSessionsPage = 1;
+            renderSessions();
+        }
+
+        function setSessionsPage(page) {
+            const totalPages = Math.max(1, Math.ceil(filteredSessions.length / SESSIONS_PAGE_SIZE));
+            if (page < 1 || page > totalPages) return;
+            currentSessionsPage = page;
             renderSessions();
         }
 
         function renderSessions() {
             const tbody = document.getElementById('sessionsTableBody');
+            const totalFiltered = filteredSessions.length;
             
-            if (filteredSessions.length === 0) {
+            if (totalFiltered === 0) {
                 document.getElementById('loadingSpinner').style.display = 'none';
                 document.getElementById('sessionsTable').style.display = 'none';
                 document.getElementById('noSessions').style.display = 'block';
                 return;
             }
 
-            tbody.innerHTML = filteredSessions.map(session => {
+            const totalPages = Math.max(1, Math.ceil(totalFiltered / SESSIONS_PAGE_SIZE));
+            const start = (currentSessionsPage - 1) * SESSIONS_PAGE_SIZE;
+            const end = Math.min(start + SESSIONS_PAGE_SIZE, totalFiltered);
+            const pageSessions = filteredSessions.slice(start, end);
+
+            tbody.innerHTML = pageSessions.map(session => {
                 const sessionDuration = calculateSessionDuration(session.start, session.end);
                 const audioDuration = session.recordings_duration || 0;
                 const isActive = session.is_active || false;
@@ -392,6 +436,9 @@
                         </td>
                         <td>
                             <span class="device-name">${escapeHtml(session.device_name)}</span>
+                        </td>
+                        <td>
+                            <span class="font-monospace small">${escapeHtml(session.session_id || '—')}</span>
                         </td>
                         <td>
                             <span class="timestamp">${formatTimestamp(session.start)}</span>
@@ -418,6 +465,29 @@
             document.getElementById('loadingSpinner').style.display = 'none';
             document.getElementById('sessionsTable').style.display = 'block';
             document.getElementById('noSessions').style.display = 'none';
+
+            document.getElementById('sessionsPaginationInfo').textContent = 
+                `Showing ${start + 1}–${end} of ${totalFiltered}`;
+
+            const paginationEl = document.getElementById('sessionsPagination');
+            let paginationHtml = '';
+            paginationHtml += `<li class="page-item ${currentSessionsPage === 1 ? 'disabled' : ''}"><a class="page-link" href="#" onclick="setSessionsPage(${currentSessionsPage - 1}); return false;">Previous</a></li>`;
+            const maxPageLinks = 7;
+            let showEllipsisStart = totalPages > maxPageLinks && currentSessionsPage > 3;
+            let showEllipsisEnd = totalPages > maxPageLinks && currentSessionsPage < totalPages - 2;
+            for (let p = 1; p <= totalPages; p++) {
+                const show = totalPages <= maxPageLinks ||
+                    p <= 2 || p >= totalPages - 1 ||
+                    (p >= currentSessionsPage - 1 && p <= currentSessionsPage + 1);
+                if (!show) {
+                    if (showEllipsisStart && p === 3) { paginationHtml += `<li class="page-item disabled"><span class="page-link">…</span></li>`; showEllipsisStart = false; }
+                    if (showEllipsisEnd && p === totalPages - 2) { paginationHtml += `<li class="page-item disabled"><span class="page-link">…</span></li>`; showEllipsisEnd = false; }
+                    continue;
+                }
+                paginationHtml += `<li class="page-item ${p === currentSessionsPage ? 'active' : ''}"><a class="page-link" href="#" onclick="setSessionsPage(${p}); return false;">${p}</a></li>`;
+            }
+            paginationHtml += `<li class="page-item ${currentSessionsPage === totalPages ? 'disabled' : ''}"><a class="page-link" href="#" onclick="setSessionsPage(${currentSessionsPage + 1}); return false;">Next</a></li>`;
+            paginationEl.innerHTML = paginationHtml;
         }
 
         function escapeHtml(text) {

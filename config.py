@@ -1,10 +1,10 @@
-"""Configuration for the Boondock Monitor application."""
+"""Configuration for the Boondock 4 Channel Player application."""
 import os
 
 class Config:
     # Server settings
     HOST = os.environ.get('AUDIO_PLAYER_HOST', '0.0.0.0')
-    PORT = int(os.environ.get('AUDIO_PLAYER_PORT', 5001))
+    PORT = int(os.environ.get('AUDIO_PLAYER_PORT', 5002))
     DEBUG = os.environ.get('AUDIO_PLAYER_DEBUG', 'false').lower() == 'true'
     
     # LLM/Ollama settings
