@@ -1,5 +1,6 @@
 """Flask application for Boondock 4 Channel Player."""
 import os
+import sys
 import uuid
 import threading
 import time
@@ -559,6 +560,14 @@ def device_command(mac):
     status_code = 200 if result.get('success') else 500
     return jsonify({'commands': commands_to_send, **result}), status_code
 
+@app.route('/api/serial/sessions/clear-all', methods=['POST'])
+def clear_all_sessions():
+    """Clear all sessions (in-memory and persisted)."""
+    from log_summary_service import log_summary_service
+    result = log_summary_service.clear_all_sessions()
+    status = 200 if result.get('success') else 500
+    return jsonify(result), status
+
 @app.route('/api/serial/sessions/<mac>', methods=['GET'])
 def get_sessions(mac):
     mac = normalize_mac(mac)
@@ -704,14 +713,6 @@ def get_all_history_devices():
 def clear_all_history():
     """Clear all serial history for all devices."""
     result = serial_service.clear_all_history()
-    status = 200 if result.get('success') else 500
-    return jsonify(result), status
-
-@app.route('/api/serial/sessions/clear-all', methods=['POST'])
-def clear_all_sessions():
-    """Clear all sessions (in-memory and persisted)."""
-    from log_summary_service import log_summary_service
-    result = log_summary_service.clear_all_sessions()
     status = 200 if result.get('success') else 500
     return jsonify(result), status
 
@@ -1144,6 +1145,11 @@ def stream_flash_all_output():
     })
 
 if __name__ == '__main__':
-    from waitress import serve
-    print(f"Starting Boondock 4 Channel Player on http://{Config.HOST}:{Config.PORT}")
-    serve(app, host=Config.HOST, port=Config.PORT)
+    use_reload = os.environ.get('RELOAD', '').lower() in ('1', 'true', 'yes') or '--reload' in sys.argv
+    if use_reload:
+        print(f"Starting with reload (watching Python files) on http://{Config.HOST}:{Config.PORT}")
+        app.run(host=Config.HOST, port=Config.PORT, debug=False, use_reloader=True)
+    else:
+        from waitress import serve
+        print(f"Starting Boondock 4 Channel Player on http://{Config.HOST}:{Config.PORT}")
+        serve(app, host=Config.HOST, port=Config.PORT)

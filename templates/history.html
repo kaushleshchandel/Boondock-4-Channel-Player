@@ -386,12 +386,6 @@
         }
         
         function toggleDevice(mac, event) {
-            // Prevent double-toggling when clicking the checkbox directly
-            if (event && event.target.type === 'checkbox') {
-                // The checkbox change event will handle it
-                return;
-            }
-            
             // Don't toggle if clicking on delete button
             if (event && event.target.closest('.btn-outline-danger')) {
                 return;
@@ -406,11 +400,12 @@
             
             renderDeviceList();
             
-            // If we have selected devices and a date, load history
-            if (selectedMacs.length > 0 && selectedDate) {
-                loadHistory();
-            } else if (selectedMacs.length === 0) {
-                // Clear history if no devices selected
+            if (selectedMacs.length > 0) {
+                // Show date list and auto-select first date (which loads history)
+                updateDateList();
+            } else {
+                // Clear history and hide date selector when no devices selected
+                updateDateList();
                 const terminal = document.getElementById('historyTerminal');
                 terminal.innerHTML = '<p class="text-muted text-center py-5">Select one or more devices and a date to view history</p>';
                 document.getElementById('historyTitle').innerHTML = '<i class="bi bi-clock-history me-2"></i>Select a device and date';
