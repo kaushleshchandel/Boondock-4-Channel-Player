@@ -285,6 +285,7 @@
         let serialDevices = [];
         let deviceData = {}; // Store device data with MAC and names
         let selectedPorts = new Set();
+        let viewDisabledPorts = new Set(); // Ports whose logs are hidden in Serial Monitor (still processed)
         let lastTimestamp = null;
         let pollInterval = null;
         let deviceDataInterval = null;
@@ -364,6 +365,11 @@
                         </div>
                     </div>
                     <div class="d-flex gap-1 align-items-center flex-shrink-0">
+                        <button class="btn btn-sm ${viewDisabledPorts.has(dev.port) ? 'btn-outline-secondary' : 'btn-outline-info'}" 
+                                onclick="toggleViewPort('${dev.port}')" 
+                                title="${viewDisabledPorts.has(dev.port) ? 'View off – click to show logs in Serial Monitor' : 'View on – click to hide logs in Serial Monitor'}">
+                            <i class="bi ${viewDisabledPorts.has(dev.port) ? 'bi-eye-slash' : 'bi-eye'}"></i>
+                        </button>
                         ${dev.connected ? `
                             <input type="checkbox" class="form-check-input" 
                                    onchange="togglePortSelection('${dev.port}', this.checked)"
@@ -415,6 +421,15 @@
             }
         }
 
+        function toggleViewPort(port) {
+            if (viewDisabledPorts.has(port)) {
+                viewDisabledPorts.delete(port);
+            } else {
+                viewDisabledPorts.add(port);
+            }
+            renderDeviceList();
+        }
+
         async function sendCommand() {
             const input = document.getElementById('commandInput');
             const message = input.value.trim();
@@ -455,6 +470,8 @@
             const autoScroll = document.getElementById('autoScroll').checked;
             
             for (const msg of messages) {
+                if (viewDisabledPorts.has(msg.port)) continue;
+                
                 const line = document.createElement('div');
                 line.className = 'terminal-line';
                 
